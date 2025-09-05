@@ -1,0 +1,8 @@
+(library
+ (name irmin_lavyek)
+ (public_name irmin-lavyek)
+ (libraries astring irmin logs)
+ (preprocess
+  (pps ppx_irmin.internal))
+ (instrumentation
+  (backend bisect_ppx)))
