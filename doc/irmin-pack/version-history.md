@@ -39,7 +39,7 @@ See `irmin-pack/pack_value.ml` and `irmin-pack/inode.ml` for how `irmin-pack` re
 | V3       | 'S'/'T' | Introduces inline contents support. Node entries can embed small values. |
 
 - V1 added an [explicit length prefix](https://github.com/mirage/irmin/blob/1f046ddaedf3532bb236f7d19510182c5948b9d6/src/irmin-pack/inode.ml#L400) to support minimal indexing.
-- V3 introduces `Contents_inlined_value` node entry type, allowing content values smaller than 16 bytes (serialized) to be stored directly within the inode entry. See [inline contents design doc](./design/inline_contents.md) for details.
+- V3 introduces `Contents_inlined_value` node entry type, allowing small content values (below a configurable threshold, default 48 bytes serialized) to be stored directly within the inode entry. See [inline contents design doc](./design/inline_contents.md) for details.
 
 **Inode magic bytes:**
 | Magic | Kind              | Description                    |

@@ -28,12 +28,13 @@ For very small values (e.g., a single byte), this overhead can be larger than th
 
 ### Inlining Threshold
 
-Content values are inlined when their **serialized size** is less than 16 bytes. The serialized size includes:
-- 1-byte variant tag (for the internal `Contents.t` encoding)
-- 1-byte varint length prefix (for strings up to 127 bytes)
-- The raw content bytes
+Content values are inlined when their **serialized size** plus 2 bytes of encoding overhead (1-byte variant tag + 1-byte varint length prefix) is less than the configured threshold. The default threshold is **48 bytes**.
 
-Therefore, raw content values of **13 bytes or less** are eligible for inlining (13 + 2 = 15 < 16).
+The threshold is configured per-repo via `Backend.Repo.inline_contents_max_bytes`. A value of `0` disables inlining entirely.
+
+### Inlining Decision
+
+The inlining decision is made at **export time** (when a tree is persisted to the store), not at tree construction time. The `Tree.export` function calls `should_inline_contents` which serializes the content value and checks its size against the threshold read from the repo configuration.
 
 ### Node Entry Format
 
@@ -72,50 +73,51 @@ Inlining is controlled by the `inline_contents` configuration option:
 Irmin_pack.config ~inline_contents:true root
 ```
 
-When `inline_contents` is `false` (the default), all contents are stored as separate entries, maintaining backward compatibility.
+When `inline_contents` is `false` (the default), all contents are stored as separate entries. In this case, even though new inodes use the V3 format (magic bytes 'S'/'T'), no `Contents_inlined_value` entries are produced, and node hashes remain identical to V2.
 
 ### Hash Computation
 
 The hash of a node depends on its entries. With inline contents:
 - The **content hash** remains unchanged (hash of the raw value)
-- The **node hash** changes because the node entry format includes inlined values differently
+- The **node hash** changes because the node entry format includes inlined values differently (using `Contents_inlined_value` instead of `Contents_hash` in the pre-hash)
 
 This means that the same logical tree will have different node hashes depending on whether inlining is enabled. The content values themselves remain semantically equivalent.
 
+When inlining is **disabled**, the new `Contents_inlined_hash` and `Contents_inlined_value` variants in `Hash_preimage.entry` are never used, so node hashes are identical to those produced by pre-inlining code. This ensures backward compatibility for stores that don't enable inlining.
+
 ## Implementation Details
 
-### Tree Module Integration
+### Backend.Repo Integration
 
-The `Irmin.Tree` module checks content size during tree construction:
+Each backend exposes its inlining threshold via `Backend.Repo.inline_contents_max_bytes`:
 
 ```ocaml
-let of_contents ?(metadata = Metadata.default) c =
-  if inline_contents_enabled then
-    let len = Repr.Size.of_value Contents.t c in
-    if len > 0 && len < 16 then
-      `Contents_inlined (c, metadata)
-    else
-      `Contents (c, metadata)
-  else
-    `Contents (c, metadata)
+(* In Backend.S.Repo signature *)
+val inline_contents_max_bytes : t -> int
 ```
+
+- `irmin-pack` returns the threshold from its configuration (48 when enabled, 0 otherwise)
+- Other backends (git, mem) return 0
+
+The `Tree.export` function reads this value from the repo and passes it to `should_inline_contents`.
 
 ### Node Value Type Extension
 
-The `Node.value` type is extended with an inlined variant:
+The `Node.value` type includes an inlined variant:
 
 ```ocaml
 type value =
-  [ `Node of node_key * contents_key list
+  [ `Node of node_key
   | `Contents of contents_key * metadata
-  | `Contents_inlined of string * metadata ]  (* New *)
+  | `Contents_inlined of string * metadata ]
 ```
 
 ### Backward Compatibility
 
-- **Reading**: Stores with Inode_v3 entries can be read by code supporting the format
-- **Writing**: New writes use Inode_v3 when inlining is enabled
-- **Migration**: No automatic migration; existing V2 inodes remain valid
+- **Reading**: The decoder dispatches on magic bytes and can read V1, V2, and V3 inodes
+- **Writing**: All new writes use Inode_v3 format (magic 'S'/'T')
+- **Mixed stores**: A pack file can contain a mix of V1/V2/V3 inodes
+- **Migration**: No automatic migration; existing inodes remain valid and readable
 
 ## Benefits
 
@@ -126,8 +128,7 @@ type value =
 ## Limitations
 
 1. **Hash incompatibility**: Enabling inlining changes node hashes, making stores incompatible for hash-based comparisons
-2. **Threshold fixed**: The 16-byte threshold is hardcoded; very small values still have some overhead
-3. **Not retroactive**: Existing contents entries are not automatically inlined on read
+2. **Not retroactive**: Existing contents entries are not automatically inlined on read
 
 ## Testing
 
@@ -140,6 +141,6 @@ The inline contents feature is tested in `test/irmin-pack/test_inline_contents.m
 
 ## Future Work
 
-- Configurable inlining threshold
+- Configurable inlining threshold via config (currently hardcoded to 48 when enabled)
 - Automatic migration of existing small contents
 - Statistics/metrics for inline vs non-inline contents ratio
