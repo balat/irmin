@@ -308,7 +308,7 @@ module Inode_permutations_generator = struct
           let contents =
             List.map (fun s -> StepMap.find s content_per_step) steps
           in
-          List.combine steps contents |> fun l -> Inode.Val.of_list l [])
+          List.combine steps contents |> Inode.Val.of_list)
         steps_per_tree
     in
     let tree_per_steps : Inode.value StepSetMap.t =
@@ -362,7 +362,7 @@ let test_add_values ~fs ~indexing_strategy =
   let v2 = Inode.Val.add v1 "y" (normal bar) in
   check_node "node x+y" v2 t;
   check_hardcoded_hash "hash v2" "d4b55db5d2d806283766354f0d7597d332156f74" v2;
-  let v3 = Inode.Val.of_list [ ("x", normal foo); ("y", normal bar) ] [] in
+  let v3 = Inode.Val.of_list [ ("x", normal foo); ("y", normal bar) ] in
   check_values "add x+y vs v x+y" v2 v3;
   Context.close t
 
@@ -384,12 +384,11 @@ let test_add_inodes ~fs ~indexing_strategy =
   Eio.Switch.run @@ fun sw ->
   let t = Context.get_store ~sw ~fs ~indexing_strategy () in
   let { Context.foo; bar; _ } = t in
-  let v1 = Inode.Val.of_list [ ("x", normal foo); ("y", normal bar) ] [] in
+  let v1 = Inode.Val.of_list [ ("x", normal foo); ("y", normal bar) ] in
   let v2 = Inode.Val.add v1 "z" (normal foo) in
   let v3 =
     Inode.Val.of_list
       [ ("x", normal foo); ("z", normal foo); ("y", normal bar) ]
-      []
   in
   check_values "add x+y+z vs v x+z+y" v2 v3;
   check_hardcoded_hash "hash v3" "46fe6c68a11a6ecd14cbe2d15519b6e5f3ba2864" v3;
@@ -404,7 +403,6 @@ let test_add_inodes ~fs ~indexing_strategy =
         ("a", normal foo);
         ("y", normal bar);
       ]
-      []
   in
   check_values "add x+y+z+a vs v x+z+a+y" v4 v5;
   check_hardcoded_hash "hash v4" "c330c08571d088141dfc82f644bffcfcf6696539" v4;
@@ -422,9 +420,9 @@ let test_remove_values ~fs ~indexing_strategy =
   Eio.Switch.run @@ fun sw ->
   let t = Context.get_store ~sw ~fs ~indexing_strategy () in
   let { Context.foo; bar; _ } = t in
-  let v1 = Inode.Val.of_list [ ("x", normal foo); ("y", normal bar) ] [] in
+  let v1 = Inode.Val.of_list [ ("x", normal foo); ("y", normal bar) ] in
   let v2 = Inode.Val.remove v1 "y" in
-  let v3 = Inode.Val.of_list [ ("x", normal foo) ] [] in
+  let v3 = Inode.Val.of_list [ ("x", normal foo) ] in
   check_values "node x obtained two ways" v2 v3;
   check_hardcoded_hash "hash v2" "a1996f4309ea31cc7ba2d4c81012885aa0e08789" v2;
   let v4 = Inode.Val.remove v2 "x" in
@@ -449,11 +447,10 @@ let test_remove_inodes ~fs ~indexing_strategy =
   let v1 =
     Inode.Val.of_list
       [ ("x", normal foo); ("y", normal bar); ("z", normal foo) ]
-      []
   in
   check_hardcoded_hash "hash v1" "46fe6c68a11a6ecd14cbe2d15519b6e5f3ba2864" v1;
   let v2 = Inode.Val.remove v1 "x" in
-  let v3 = Inode.Val.of_list [ ("y", normal bar); ("z", normal foo) ] [] in
+  let v3 = Inode.Val.of_list [ ("y", normal bar); ("z", normal foo) ] in
   check_values "node y+z obtained two ways" v2 v3;
   check_hardcoded_hash "hash v2" "ea22a2936eed53978bde62f0185cee9d8bbf9489" v2;
   let v4 =
@@ -464,7 +461,6 @@ let test_remove_inodes ~fs ~indexing_strategy =
         ("a", normal foo);
         ("y", normal bar);
       ]
-      []
   in
   let v5 = Inode.Val.remove v4 "a" in
   check_values "node x+y+z obtained two ways" v1 v5;
@@ -562,7 +558,7 @@ let test_truncated_inodes ~fs ~indexing_strategy =
   in
   (* v1 is a Truncated inode of tag Values. No pointers. *)
   let v1 =
-    Inode.Val.of_list [ (s00, normal foo); (s10, normal foo) ] []
+    Inode.Val.of_list [ (s00, normal foo); (s10, normal foo) ]
     |> to_truncated
   in
   Inode.Val.list v1 |> ignore;
@@ -581,7 +577,6 @@ let test_truncated_inodes ~fs ~indexing_strategy =
   let v3 =
     Inode.Val.of_list
       [ (s00, normal foo); (s10, normal bar); (s01, normal bar) ]
-      []
     |> to_truncated
   in
   (with_failure @@ fun () -> Inode.Val.list v3 |> ignore);
@@ -605,7 +600,6 @@ let test_intermediate_inode_as_root ~fs ~indexing_strategy =
   let v0 =
     Inode.Val.of_list
       [ (s000, normal foo); (s001, normal bar); (s010, normal foo) ]
-      []
   in
   let h_depth0 = Inode.batch t.store @@ fun store -> Inode.add store v0 in
   let (`Inode h_depth1) =
@@ -661,7 +655,6 @@ let test_invalid_depth_intermediate_inode ~fs ~indexing_strategy =
   let v0 =
     Inode_mock.Val.of_list
       [ (s000, normal foo); (s001, normal bar); (s010, normal foo) ]
-      []
   in
   let h_depth0 =
     Inode_mock.batch t.store @@ fun store -> Inode_mock.add store v0
@@ -717,12 +710,12 @@ let test_concrete_inodes ~fs ~indexing_strategy =
     let msg = Fmt.str "%a" pp_concrete c in
     Alcotest.check testable msg (Ok v) r
   in
-  let v = Inode.Val.of_list [ ("a", normal foo) ] [] in
+  let v = Inode.Val.of_list [ ("a", normal foo) ] in
   check v;
-  let v = Inode.Val.of_list [ ("a", normal foo); ("y", node bar) ] [] in
+  let v = Inode.Val.of_list [ ("a", normal foo); ("y", node bar) ] in
   check v;
   let v =
-    Inode.Val.of_list [ ("x", node foo); ("a", normal foo); ("y", node bar) ] []
+    Inode.Val.of_list [ ("x", node foo); ("a", normal foo); ("y", node bar) ]
   in
   check v;
   let v =
@@ -730,7 +723,6 @@ let test_concrete_inodes ~fs ~indexing_strategy =
       [
         ("x", normal foo); ("z", normal foo); ("a", normal foo); ("y", node bar);
       ]
-      []
   in
   check v;
   Context.close t
@@ -802,7 +794,7 @@ module Inode_tezos = struct
     Eio.Switch.run @@ fun sw ->
     let t = S.Context.get_store ~sw ~fs ~indexing_strategy () in
     let { S.Context.foo; _ } = t in
-    let v = S.Inode.Val.of_list [ ("x", normal foo); ("z", normal foo) ] [] in
+    let v = S.Inode.Val.of_list [ ("x", normal foo); ("z", normal foo) ] in
     let h = S.Inter.Val.hash_exn v in
     let hash_to_bin_string =
       Irmin.Type.(unstage (to_bin_string S.Inode.Val.hash_t))
@@ -851,7 +843,6 @@ module Inode_tezos = struct
           ("w", normal bar);
           ("t", normal bar);
         ]
-        []
     in
     let h = S.Inter.Val.hash_exn v in
     let to_bin_string_hash =
