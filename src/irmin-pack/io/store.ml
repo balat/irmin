@@ -169,10 +169,10 @@ struct
         let branch_t t = t.branch
         let config t = t.config
 
+        let inline_contents_max_bytes t =
+          if Irmin_pack.Conf.inline_contents (config t) then 48 else 0
+
         let v config =
-          (* Set the global inline_contents flag based on config *)
-          Irmin.Tree.set_inline_contents_enabled
-            (Irmin_pack.Conf.inline_contents config);
           let sw = Conf.switch config in
           let fs = Conf.fs config in
           let root = Eio.Path.(fs / Irmin_pack.Conf.root config) in

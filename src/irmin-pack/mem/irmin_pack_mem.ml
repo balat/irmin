@@ -139,6 +139,9 @@ module Maker (Config : Irmin_pack.Conf.S) = struct
         let branch_t t = t.branch
         let config t = t.config
 
+        let inline_contents_max_bytes t =
+          if Irmin_pack.Conf.inline_contents (config t) then 48 else 0
+
         let batch ?lock:_ t f =
           Commit.Indexable.batch t.commit (fun commit ->
               Node.Indexable.batch t.node (fun node ->
@@ -149,9 +152,6 @@ module Maker (Config : Irmin_pack.Conf.S) = struct
                       f contents node commit)))
 
         let v config =
-          (* Set the global inline_contents flag based on config *)
-          Irmin.Tree.set_inline_contents_enabled
-            (Irmin_pack.Conf.inline_contents config);
           let root = Irmin_pack.Conf.root config in
           let contents = Contents.Indexable.v root in
           let node = Node.Indexable.v root in

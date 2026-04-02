@@ -96,9 +96,6 @@ let run_one ~sw ~fs ~config =
   let contents = generate ~config in
   let content_sizes = Array.map (fun (_, _, size) -> size) contents in
 
-  (* Set the inlining threshold before opening repo *)
-  Irmin.Tree.set_inline_contents_max_bytes config.inline_threshold;
-
   (* Write phase *)
   let repo =
     open_repo ~sw ~fs ~fresh:true ~readonly:false

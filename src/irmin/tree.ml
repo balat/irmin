@@ -22,27 +22,6 @@ let src = Logs.Src.create "irmin.tree" ~doc:"Persistent lazy trees for Irmin"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-(* Global flag to control inlining of small contents.
-   This is set based on the store configuration at initialization time.
-   Default is false (no inlining).
-
-   TODO: This ref is a pragmatic shortcut. It's set once at repo creation and
-   never changes during the store's lifetime. A cleaner design would be to:
-   - Thread it through the repo (Backend.S / Repo.t carries config already), or
-   - Store it in the tree's Env.t which is already threaded through operations, or
-   - Use a functor parameter for compile-time configuration.
-   The current approach has the downside that opening two repos with different
-   settings would cause the second to overwrite the first's setting. *)
-let inline_contents_enabled = ref false
-let set_inline_contents_enabled v = inline_contents_enabled := v
-
-(* Maximum size in bytes for contents to be inlined directly in nodes.
-   Note: this is the threshold for the *serialized* size including 2 bytes
-   overhead (variant tag + length prefix). *)
-let inline_contents_max_bytes = ref 48
-let set_inline_contents_max_bytes v = inline_contents_max_bytes := v
-let get_inline_contents_max_bytes () = !inline_contents_max_bytes
-
 type fuzzy_bool = False | True | Maybe
 type ('a, 'r) cont = ('a -> 'r) -> 'r
 
@@ -2244,6 +2223,8 @@ module Make (P : Backend.S) = struct
       k key
     in
 
+    let inline_max = P.Repo.inline_contents_max_bytes repo in
+
     (* Helper to check if contents should be inlined at export time.
        Note: the serialized size includes only the raw content bytes.
        When stored in a node, there's additional overhead:
@@ -2251,17 +2232,14 @@ module Make (P : Backend.S) = struct
        - 1-byte varint length prefix for the string
        So we add 2 bytes to the size check. *)
     let should_inline_contents c =
-      if not !inline_contents_enabled then None
+      if inline_max <= 0 then None
       else
         match Contents.to_value ~cache:true c with
         | Error _ -> None
         | Ok v ->
             let to_bin = Type.(unstage (to_bin_string P.Contents.Val.t)) in
             let bytes = to_bin v in
-            (* Add 2 bytes for variant tag and length prefix overhead *)
-            if String.length bytes + 2 < !inline_contents_max_bytes then
-              Some bytes
-            else None
+            if String.length bytes + 2 < inline_max then Some bytes else None
     in
 
     let add_node_map n (x : Node.map) k =
