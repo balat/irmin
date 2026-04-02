@@ -2176,10 +2176,10 @@ struct
     let hash_exn ?force t = apply t { f = (fun _ v -> I.hash_exn ?force v) }
 
     let save ?(allow_non_root = false) ~add ~index ~mem t =
-      (* if Conf.forbid_empty_dir_persistence && is_empty t then
+      if Conf.forbid_empty_dir_persistence && is_empty t then
         failwith
           "Persisting an empty node is forbidden by the configuration of the \
-           irmin-pack store"; *)
+           irmin-pack store";
       let f layout v =
         if not allow_non_root then I.check_write_op_supported v;
         I.save layout ~add ~index ~mem v
