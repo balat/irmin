@@ -84,6 +84,7 @@ module type Sigs = sig
     ?no_migrate:bool ->
     ?lower_root:Eio.Fs.dir_ty Eio.Path.t option ->
     ?inline_contents:bool ->
+    ?inline_contents_max_bytes:int ->
     Eio.Fs.dir_ty Eio.Path.t ->
     Irmin.config
   (** Configuration options for stores. See {!Irmin_pack.Conf} for more details.

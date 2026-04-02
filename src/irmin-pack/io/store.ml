@@ -170,7 +170,10 @@ struct
         let config t = t.config
 
         let inline_contents_max_bytes t =
-          if Irmin_pack.Conf.inline_contents (config t) then 48 else 0
+          let c = config t in
+          if Irmin_pack.Conf.inline_contents c then
+            Irmin_pack.Conf.inline_contents_max_bytes c
+          else 0
 
         let v config =
           let sw = Conf.switch config in

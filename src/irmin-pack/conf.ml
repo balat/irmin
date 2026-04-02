@@ -39,6 +39,7 @@ module Default = struct
   let no_migrate = false
   let lower_root = None
   let inline_contents = false
+  let inline_contents_max_bytes = 48
 end
 
 open Irmin.Backend.Conf
@@ -108,6 +109,14 @@ module Key = struct
     key ~spec
       ~doc:"Enable inlining of small contents values directly inside nodes"
       "inline-contents" Irmin.Type.bool Default.inline_contents
+
+  let inline_contents_max_bytes =
+    key ~spec
+      ~doc:
+        "Maximum serialized size in bytes for contents to be inlined. \
+         Includes 2 bytes of encoding overhead."
+      "inline-contents-max-bytes" Irmin.Type.int
+      Default.inline_contents_max_bytes
 end
 
 let fresh config = get config Key.fresh
@@ -130,6 +139,9 @@ let indexing_strategy config = get config Key.indexing_strategy
 let use_fsync config = get config Key.use_fsync
 let no_migrate config = get config Key.no_migrate
 let inline_contents config = get config Key.inline_contents
+
+let inline_contents_max_bytes config =
+  get config Key.inline_contents_max_bytes
 let switch config = find_key config "sw" sw_typ
 let fs config = find_key config "fs" fs_typ
 
@@ -162,7 +174,8 @@ let init ~sw ~fs ?(fresh = Default.fresh) ?(readonly = Default.readonly)
     ?(merge_throttle = Default.merge_throttle)
     ?(indexing_strategy = Default.indexing_strategy)
     ?(use_fsync = Default.use_fsync) ?(no_migrate = Default.no_migrate)
-    ?(lower_root = None) ?(inline_contents = Default.inline_contents) root =
+    ?(lower_root = None) ?(inline_contents = Default.inline_contents)
+    ?(inline_contents_max_bytes = Default.inline_contents_max_bytes) root =
   let root = Eio.Path.native_exn root in
   let lower_root =
     match lower_root with
@@ -182,4 +195,7 @@ let init ~sw ~fs ?(fresh = Default.fresh) ?(readonly = Default.readonly)
   let config = add config Key.use_fsync use_fsync in
   let config = add config Key.no_migrate no_migrate in
   let config = add config Key.inline_contents inline_contents in
+  let config =
+    add config Key.inline_contents_max_bytes inline_contents_max_bytes
+  in
   verify config
