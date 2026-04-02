@@ -2313,9 +2313,7 @@ module Make (P : Backend.S) = struct
       in
       let _, to_inline = List.split to_inline in
       let node = P.Node.Val.of_seq node_seq to_inline in
-      let r = add_node n node to_inline k in
-      (* assert false; *)
-      r
+      add_node n node to_inline k
     in
 
     let add_updated_node n (v : Node.value) (updates : Node.updatemap) to_inline

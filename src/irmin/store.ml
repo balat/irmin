@@ -196,9 +196,7 @@ module Make (B : Backend.S) = struct
         match Tree.destruct tree with
         | `Contents _ -> Error "cannot add contents at the root"
         | `Node (t, _il) ->
-            (* assert false; *)
             let node = Tree.export ~clear r contents_t node_t t in
-            (* assert false; *)
             let v = B.Commit.Val.v ~info ~node ~parents in
             let key = B.Commit.add commit_t v in
             Ok { r; key; v }
