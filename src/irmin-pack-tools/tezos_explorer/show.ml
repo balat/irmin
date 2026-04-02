@@ -3,34 +3,7 @@ open Notty_unix
 open Import
 open Files
 
-module Conf = struct
-  let entries = 32
-  let stable_hash = 256
-  let contents_length_header = None
-  let inode_child_order = `Seeded_hash
-  let forbid_empty_dir_persistence = true
-end
-
-module Content = Irmin.Contents.String
-module Schema = Irmin.Schema.KV (Content)
-module Files = Make (Conf) (Schema)
-
-(*
-  module Node = Node.Make (Hash) (Path) (Metadata)
-  module Commit = Commit.Make (Hash)
-  module Info = Info.Default *)
-
-(* module Schema = struct
-  open Irmin
-  module Hash = Hash.SHA1
-  module Info = Info.Default
-  module Branch = Branch.String
-  module Path = Path.String_list
-  module Metadata = Metadata.None
-  module Contents = Content
-  module Node = Node.Make (Hash) (Path) (Metadata)
-  module Commit = Commit.Generic_key.Make (Hash)
-end *)
+module Files = Make (Irmin_tezos.Conf) (Irmin_tezos.Schema)
 
 type entry_content = {
   hash : string;

@@ -93,13 +93,7 @@ let with_progress_bar ~message ~n ~unit =
   in
   with_reporter ~config bar
 
-module Conf = struct
-  let entries = 32
-  let stable_hash = 256
-  let contents_length_header = None
-  let inode_child_order = `Seeded_hash
-  let forbid_empty_dir_persistence = true
-end
+module Conf = Irmin_tezos.Conf
 
 module Schema = struct
   open Irmin

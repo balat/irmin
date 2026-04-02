@@ -244,7 +244,7 @@ module Test_corrupted_stores = struct
     let rw = S.Repo.v config in
 
     let commit =
-      commit_of_string rw "8b7de2fafd78856555de2972062bfc069fc7cbf3"
+      commit_of_string rw "22e159de13b427226e5901defd17f0c14e744205"
     in
     let result = S.integrity_check ~heads:[ commit ] ~auto_repair:false rw in
     let () =
@@ -325,7 +325,7 @@ module Test_traverse_gced = struct
     let conf = conf ~sw ~fs in
     let repo = S.Repo.v conf in
     let commit =
-      commit_of_string repo "8b7de2fafd78856555de2972062bfc069fc7cbf3"
+      commit_of_string repo "22e159de13b427226e5901defd17f0c14e744205"
     in
     let tree = S.Commit.tree commit in
     let tree = S.Tree.add tree [ "abba"; "baba" ] "x" in
