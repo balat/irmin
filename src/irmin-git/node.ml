@@ -117,15 +117,14 @@ module Make (G : Git.S) (P : Irmin.Path.S) = struct
 
   let v alist =
     let alist =
-      List.filter_map
+      List.map
         (fun (l, x) ->
           let v k = (l, k) in
           match x with
-          | `Node (n, _inlined) -> Some (to_git `Dir (v n))
-          | `Contents (c, perm) -> Some (to_git (perm :> Git.Tree.perm) (v c))
+          | `Node (n, _inlined) -> to_git `Dir (v n)
+          | `Contents (c, perm) -> to_git (perm :> Git.Tree.perm) (v c)
           | `Contents_inlined _ ->
-              (* Git backend does not support inlined contents *)
-              None)
+              failwith "irmin-git: Contents_inlined not supported")
         alist
     in
     (* Tree.of_list will sort the list in the right order *)
