@@ -98,7 +98,7 @@ struct
 
     let hash_of_entry (_, t) =
       match t with
-      | `Node (h, _) -> Node_key.to_hash h
+      | `Node h -> Node_key.to_hash h
       | `Contents (h, _) -> Contents_key.to_hash h
       | `Contents_inlined (bytes, _) ->
           (* For inlined contents, compute hash from the raw bytes *)

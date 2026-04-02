@@ -116,7 +116,7 @@ end = struct
 
   module Extras = struct
     type data =
-      [ `Node of Key.t * Key.t list
+      [ `Node of Key.t
       | `Contents of Key.t * unit
       | `Contents_inlined of string * unit ]
     [@@deriving irmin]
@@ -131,7 +131,7 @@ end = struct
         | Error _ -> assert false
         | Ok x -> (
             match Random.int 2 with
-            | 0 -> `Node (x, [])
+            | 0 -> `Node x
             | 1 -> `Contents (x, ())
             | _ -> assert false)
   end

@@ -189,7 +189,7 @@ type pred =
   [ `Contents of Key.t
   | `Contents_inlined of string * unit
   | `Inode of Key.t
-  | `Node of Key.t * Key.t list ]
+  | `Node of Key.t ]
 [@@deriving irmin]
 
 let pp_pred = Irmin.Type.pp pred_t
@@ -197,7 +197,7 @@ let pp_pred = Irmin.Type.pp pred_t
 module H_contents = Irmin.Hash.Typed (Hash) (Schema.Contents)
 
 let normal x = `Contents (x, Metadata.default)
-let node x = `Node (x, [])
+let node x = `Node x
 let check_hash = Alcotest.check_repr Inode.Val.hash_t
 let check_values = Alcotest.check_repr Inode.Val.t
 

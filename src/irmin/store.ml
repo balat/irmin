@@ -72,12 +72,12 @@ module Make (B : Backend.S) = struct
       | Some k -> Some k
       | None -> (
           match hash t with
-          | `Node (h, _il) -> (
+          | `Node h -> (
               match B.Node.index (B.Repo.node_t r) h with
               | None -> None
               | Some k ->
-                  (* TODO inline *)
-                  Some (`Node (k, [])))
+
+                  Some (`Node k))
           | `Contents (h, m) -> (
               match B.Contents.index (B.Repo.contents_t r) h with
               | None -> None
@@ -89,12 +89,12 @@ module Make (B : Backend.S) = struct
     let of_key r k = import r k
 
     let of_hash r = function
-      | `Node (h, _il) -> (
+      | `Node h -> (
           match B.Node.index (B.Repo.node_t r) h with
           | None -> None
           | Some k ->
-              (* TODO inline *)
-              of_key r (`Node (k, [])))
+
+              of_key r (`Node k))
       | `Contents (h, m) -> (
           match B.Contents.index (B.Repo.contents_t r) h with
           | None -> None
@@ -109,7 +109,7 @@ module Make (B : Backend.S) = struct
     let hash : ?cache:bool -> t -> hash =
      fun ?cache tr ->
       match hash ?cache tr with
-      | `Node (h, _) -> h
+      | `Node h -> h
       | `Contents (h, _) -> h
       | `Contents_inlined (bytes, _) ->
           (* For inlined contents, compute hash from bytes *)
@@ -172,9 +172,9 @@ module Make (B : Backend.S) = struct
         let c = Tree.Contents.force_exn c in
         let k = save_contents x c in
         `Contents (k, m)
-    | `Node (n, _il) ->
+    | `Node n ->
         let k = Tree.export ~clear r x y n in
-        `Node (k, [])
+        `Node k
 
   module Contents_keys = Set.Make (struct
     type t = Contents_key.t [@@deriving irmin ~compare]
@@ -195,7 +195,7 @@ module Make (B : Backend.S) = struct
         B.Repo.batch ~lock:true r @@ fun contents_t node_t commit_t ->
         match Tree.destruct tree with
         | `Contents _ -> Error "cannot add contents at the root"
-        | `Node (t, _il) ->
+        | `Node t ->
             let node = Tree.export ~clear r contents_t node_t t in
             let v = B.Commit.Val.v ~info ~node ~parents in
             let key = B.Commit.add commit_t v in
@@ -204,7 +204,7 @@ module Make (B : Backend.S) = struct
       match result with Ok t -> t | Error e -> invalid_arg e
 
     let node t = B.Commit.Val.node t.v
-    let tree t = Tree.import_no_check t.r (`Node (node t, []))
+    let tree t = Tree.import_no_check t.r (`Node (node t))
     let equal x y = equal_commit_key x.key y.key
     let key t = t.key
     let hash t = B.Commit.Key.to_hash t.key
@@ -309,7 +309,7 @@ module Make (B : Backend.S) = struct
           match B.Commit.find (commit_t t) k with
           | None -> ()
           | Some c ->
-              root_nodes := (B.Commit.Val.node c, []) :: !root_nodes;
+              root_nodes := B.Commit.Val.node c :: !root_nodes;
               B.Slice.add slice (`Commit (Commit_key.to_hash k, c)))
         keys;
       if not full then slice
@@ -318,8 +318,7 @@ module Make (B : Backend.S) = struct
         let nodes = Graph.closure (node_t t) ~min:[] ~max:!root_nodes in
         let contents = ref Contents_keys.empty in
         List.iter
-          (fun (k, _il) ->
-            (* TODO inline *)
+          (fun k ->
             match B.Node.find (node_t t) k with
             | None -> ()
             | Some v ->
@@ -376,7 +375,7 @@ module Make (B : Backend.S) = struct
 
     type elt =
       [ `Commit of commit_key
-      | `Node of node_key * contents_key list
+      | `Node of node_key
       | `Contents of contents_key
       | `Contents_inlined of contents_key
       | `Branch of B.Branch.Key.t ]
@@ -386,7 +385,7 @@ module Make (B : Backend.S) = struct
     let default_pred_contents _ _ = []
     let default_pred_contents_inlined _ _ = []
 
-    let default_pred_node t (k, _il) =
+    let default_pred_node t k =
       match B.Node.find (node_t t) k with
       | None -> []
       | Some v ->
@@ -405,7 +404,7 @@ module Make (B : Backend.S) = struct
       | Some c ->
           let node = B.Commit.Val.node c in
           let parents = B.Commit.Val.parents c in
-          [ `Node (node, []) ] @ List.map (fun k -> `Commit k) parents
+          [ `Node node ] @ List.map (fun k -> `Commit k) parents
 
     let default_pred_branch t b =
       match B.Branch.find (branch_t t) b with
@@ -589,8 +588,8 @@ module Make (B : Backend.S) = struct
             if Atomic.compare_and_set t.tree old None then
               (* the tree cache needs to be invalidated *)
               let tree =
-                (* TODO inline *)
-                Tree.import_no_check (repo t) (`Node (Commit.node h, []))
+  
+                Tree.import_no_check (repo t) (`Node (Commit.node h))
               in
               if Atomic.compare_and_set t.tree None (Some (h, tree)) then
                 Some (h, tree)
@@ -725,7 +724,7 @@ module Make (B : Backend.S) = struct
     aux 0
 
   let root_tree = function
-    | `Node (n, _il) -> Tree.v (`Node (n, []))
+    | `Node n -> Tree.v (`Node n)
     | `Contents _ -> assert false
     | `Contents_inlined _ -> assert false
 

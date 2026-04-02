@@ -31,7 +31,7 @@ module type Snapshot = sig
   type kinded_hash =
     | Contents of hash * metadata
     | Contents_inlined of string * metadata
-    | Node of hash * hash list
+    | Node of hash
   [@@deriving irmin]
 
   type entry = { step : string; hash : kinded_hash } [@@deriving irmin]
@@ -56,7 +56,7 @@ module type Value = sig
   val pred :
     t ->
     (step option
-    * [ `Node of node_key * contents_key list
+    * [ `Node of node_key
       | `Inode of node_key
       | `Contents of contents_key
       | `Contents_inlined of string * metadata ])
@@ -182,7 +182,7 @@ module type Internal = sig
         | Contents of contents_key
         | Contents_x of metadata * contents_key
         | Contents_inlined_value of string * metadata
-        | Node of node_key * contents_key list
+        | Node of node_key
       [@@deriving irmin]
 
       type entry = { name : step; key : kinded_key } [@@deriving irmin]

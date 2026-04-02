@@ -31,7 +31,7 @@ module Make (G : Git.S) (P : Irmin.Path.S) = struct
   type contents_key = hash [@@deriving irmin]
 
   type value =
-    [ `Node of hash * hash list
+    [ `Node of hash
     | `Contents of hash * metadata
     | `Contents_inlined of string * metadata ]
   [@@deriving irmin]
@@ -56,7 +56,7 @@ module Make (G : Git.S) (P : Irmin.Path.S) = struct
           else
             let name = to_step name in
             match perm with
-            | `Dir -> (i + 1, (name, `Node (node, [])) :: acc)
+            | `Dir -> (i + 1, (name, `Node node) :: acc)
             | `Commit -> (i + 1, acc) (* FIXME *)
             | #Metadata.t as p -> (i + 1, (name, `Contents (node, p)) :: acc))
         (0, []) t
@@ -70,7 +70,7 @@ module Make (G : Git.S) (P : Irmin.Path.S) = struct
       | x :: xs when x.Git.Tree.name <> s -> aux xs
       | { Git.Tree.perm; node; _ } :: _ -> (
           match perm with
-          | `Dir -> Some (`Node (node, []))
+          | `Dir -> Some (`Node node)
           | `Commit -> None (* FIXME *)
           | #Metadata.t as p -> Some (`Contents (node, p)))
     in
@@ -84,7 +84,7 @@ module Make (G : Git.S) (P : Irmin.Path.S) = struct
     let name = of_step name in
     let entry =
       match value with
-      | `Node (node, _inlined) -> Git.Tree.entry ~name `Dir node
+      | `Node node -> Git.Tree.entry ~name `Dir node
       | `Contents (node, perm) ->
           Git.Tree.entry ~name (perm :> Git.Tree.perm) node
       | `Contents_inlined _ ->
@@ -121,7 +121,7 @@ module Make (G : Git.S) (P : Irmin.Path.S) = struct
         (fun (l, x) ->
           let v k = (l, k) in
           match x with
-          | `Node (n, _inlined) -> to_git `Dir (v n)
+          | `Node n -> to_git `Dir (v n)
           | `Contents (c, perm) -> to_git (perm :> Git.Tree.perm) (v c)
           | `Contents_inlined _ ->
               failwith "irmin-git: Contents_inlined not supported")
@@ -131,7 +131,7 @@ module Make (G : Git.S) (P : Irmin.Path.S) = struct
     G.Value.Tree.of_list alist
 
   let alist t =
-    let mk_n k = `Node (k, []) in
+    let mk_n k = `Node k in
     let mk_c k metadata = `Contents (k, metadata) in
     List.fold_left
       (fun acc -> function
@@ -149,11 +149,11 @@ module Make (G : Git.S) (P : Irmin.Path.S) = struct
 
   module N = Irmin.Node.Make (Hash) (P) (Metadata)
 
-  let to_n t = N.of_list (alist t) []
+  let to_n t = N.of_list (alist t)
   let of_n n = v (N.list n)
   let to_bin t = Raw.to_raw (G.Value.tree t)
-  let of_list l _inlined = v l
-  let of_seq seq _inlined = List.of_seq seq |> v
+  let of_list l = v l
+  let of_seq seq = List.of_seq seq |> v
 
   let seq ?offset ?length ?cache t =
     list ?offset ?length ?cache t |> List.to_seq

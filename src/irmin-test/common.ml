@@ -176,29 +176,29 @@ module Make_helpers (S : Generic_key) = struct
 
   let n1 ~repo =
     let kv1 = kv1 ~repo in
-    with_node repo (fun t () -> Graph.v t [ ("x", normal kv1) ] [])
+    with_node repo (fun t () -> Graph.v t [ ("x", normal kv1) ])
 
   let n2 ~repo =
     let kn1 = n1 ~repo in
-    with_node repo (fun t () -> Graph.v t [ ("b", `Node (kn1, [])) ] [])
+    with_node repo (fun t () -> Graph.v t [ ("b", `Node kn1) ])
 
   let n3 ~repo =
     let kn2 = n2 ~repo in
-    with_node repo (fun t () -> Graph.v t [ ("a", `Node (kn2, [])) ] [])
+    with_node repo (fun t () -> Graph.v t [ ("a", `Node kn2) ])
 
   let n4 ~repo =
     let kn1 = n1 ~repo in
     let kv2 = kv2 ~repo in
-    let kn4 = with_node repo (fun t () -> Graph.v t [ ("x", normal kv2) ] []) in
+    let kn4 = with_node repo (fun t () -> Graph.v t [ ("x", normal kv2) ]) in
     let kn5 =
       with_node repo (fun t () ->
-          Graph.v t [ ("b", `Node (kn1, [])); ("c", `Node (kn4, [])) ] [])
+          Graph.v t [ ("b", `Node kn1); ("c", `Node kn4) ])
     in
-    with_node repo (fun t () -> Graph.v t [ ("a", `Node (kn5, [])) ])
+    with_node repo (fun t () -> Graph.v t [ ("a", `Node kn5) ])
 
   let r1 ~repo =
     let kn2 = n2 ~repo in
-    match S.Tree.of_key repo (`Node (kn2, [])) with
+    match S.Tree.of_key repo (`Node kn2) with
     | None -> Alcotest.fail "r1"
     | Some tree ->
         S.Commit.v repo ~info:S.Info.empty ~parents:[] (tree :> S.tree)
@@ -206,7 +206,7 @@ module Make_helpers (S : Generic_key) = struct
   let r2 ~repo =
     let kn3 = n3 ~repo in
     let kr1 = r1 ~repo in
-    match S.Tree.of_key repo (`Node (kn3, [])) with
+    match S.Tree.of_key repo (`Node kn3) with
     | None -> Alcotest.fail "r2"
     | Some t3 ->
         S.Commit.v repo ~info:S.Info.empty

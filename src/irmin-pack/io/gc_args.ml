@@ -46,7 +46,7 @@ module type S = sig
       * [ `Contents of key
         | `Contents_inlined of string * metadata
         | `Inode of key
-        | `Node of key * key list ])
+        | `Node of key ])
       list
   end
 

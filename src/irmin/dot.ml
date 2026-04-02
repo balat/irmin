@@ -163,7 +163,7 @@ module Make (S : Store.Generic_key.S) = struct
     List.iter
       (fun (k, t) ->
         add_vertex
-          (`Node (k, []))
+          (`Node k)
           [ `Shape `Box; `Style `Dotted; label_of_node k t ])
       !nodes;
     List.iter
@@ -179,15 +179,15 @@ module Make (S : Store.Generic_key.S) = struct
             | `Contents (v, _meta) ->
                 let v = Contents.Key.to_hash v in
                 add_edge
-                  (`Node (k, []))
+                  (`Node k)
                   [ `Style `Dotted; label_of_step l ]
                   (`Contents v)
-            | `Node (n, _) ->
+            | `Node n ->
                 let n = Node.Key.to_hash n in
                 add_edge
-                  (`Node (k, []))
+                  (`Node k)
                   [ `Style `Solid; label_of_step l ]
-                  (`Node (n, []))
+                  (`Node n)
             | `Contents_inlined _ ->
                 (* Inlined contents are embedded in the node, no edge to draw *)
                 ())
@@ -201,7 +201,7 @@ module Make (S : Store.Generic_key.S) = struct
             add_edge (`Commit k) [ `Style `Bold ] (`Commit c))
           (Commit.Val.parents r);
         let node_hash = Commit.Val.node r |> Node.Key.to_hash in
-        add_edge (`Commit k) [ `Style `Dashed ] (`Node (node_hash, [])))
+        add_edge (`Commit k) [ `Style `Dashed ] (`Node node_hash))
       !commits;
     let branch_t = S.Backend.Repo.branch_t (S.repo t) in
     let bs = Branch.list branch_t in

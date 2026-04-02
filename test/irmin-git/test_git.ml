@@ -205,7 +205,7 @@ let test_blobs (module S : S) =
       X.Backend.Repo.batch repo (fun x y _ ->
           X.save_tree ~clear:false repo x y t)
     with
-    | `Node (k, _) -> X.Backend.Node.Key.to_hash k
+    | `Node k -> X.Backend.Node.Key.to_hash k
     | `Contents (k, _) -> X.Backend.Contents.Key.to_hash k
     | `Contents_inlined _ ->
         (* irmin-git doesn't support inlined contents *)

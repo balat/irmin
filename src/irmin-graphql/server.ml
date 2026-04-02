@@ -301,7 +301,7 @@ struct
     contents_key_value :
       ('ctx, (Store.contents_key * Store.metadata) option) Schema.typ;
     node_key_value :
-      ('ctx, (Store.node_key * Store.contents_key list) option) Schema.typ;
+      ('ctx, Store.node_key option) Schema.typ;
   }
 
   let rec store_schema =
@@ -531,7 +531,7 @@ struct
                 [
                   field "node" ~doc:"The key of the node"
                     ~typ:(non_null Types.Node_key.schema_typ) ~args:[]
-                    ~resolve:(fun _ (x, _inlined) -> x);
+                    ~resolve:(fun _ x -> x);
                 ])
         in
         {

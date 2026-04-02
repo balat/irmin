@@ -422,7 +422,7 @@ struct
       match kind with
       | Contents ->
           progress_contents ();
-          check ~kind:`Contents ~offset ~length k (* TODO inlined ?*)
+          check ~kind:`Contents ~offset ~length k
       | Inode_v1_stable | Inode_v1_unstable | Inode_v2_root | Inode_v2_nonroot
       | Inode_v3_root | Inode_v3_nonroot ->
           progress_nodes ();
@@ -495,7 +495,7 @@ struct
       progress_contents ();
       check_contents key
     in
-    let pred_node repo (key, _il) =
+    let pred_node repo key =
       match X.Node.find (X.Repo.node_t repo) key with
       | None ->
           Fmt.failwith "node with hash %a not found" pp_hash (XKey.to_hash key)
@@ -505,7 +505,7 @@ struct
             (function
               | s, `Inode x ->
                   assert (s = None);
-                  Some (`Node (x, []))
+                  Some (`Node x)
               | _, `Node x -> Some (`Node x)
               | _, `Contents x -> Some (`Contents x)
               | _, `Contents_inlined _ ->
@@ -516,7 +516,7 @@ struct
           add_error `Wrong_hash (XKey.to_hash key);
           []
     in
-    let check_nodes (key, _il) =
+    let check_nodes key =
       match X.Node.find (X.Repo.node_t t) key with
       | None ->
           Fmt.failwith "node with hash %a not found" pp_hash (XKey.to_hash key)
@@ -537,8 +537,7 @@ struct
         | None -> []
         | Some c ->
             let node = X.Commit.Val.node c in
-            (* TODO inline *)
-            [ `Node (node, []) ]
+            [ `Node node ]
       with _exn ->
         add_error `Wrong_hash (XKey.to_hash k);
         []
@@ -561,13 +560,13 @@ struct
       Object_counter.start ppf
     in
     let errors = ref [] in
-    let pred_node repo (key, il) =
-      try pred repo (key, il)
+    let pred_node repo key =
+      try pred repo key
       with _ ->
         errors := "Error in repo iter" :: !errors;
         []
     in
-    let node (k, _il) =
+    let node k =
       progress_nodes ();
       match check k with Ok () -> () | Error msg -> errors := msg :: !errors
     in

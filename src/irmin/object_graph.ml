@@ -41,7 +41,7 @@ struct
     type t =
       [ `Contents of Contents_key.t
       | `Contents_inlined of Contents_key.t
-      | `Node of Node_key.t * Contents_key.t list
+      | `Node of Node_key.t
       | `Commit of Commit_key.t
       | `Branch of Branch.t ]
     [@@deriving irmin]
@@ -59,8 +59,7 @@ struct
       match t with
       | `Contents c -> hash_contents c
       | `Contents_inlined c -> hash_contents c
-      | `Node (n, _) -> hash_node n
-      (* TODO inline *)
+      | `Node n -> hash_node n
       | `Commit c -> hash_commit c
       | `Branch b -> hash_branch b
   end
@@ -244,7 +243,7 @@ struct
     let vertex_name k =
       let str t v = "\"" ^ Type.to_string t v ^ "\"" in
       match k with
-      | `Node (n, _) -> str Node_key.t n
+      | `Node n -> str Node_key.t n
       | `Commit c -> str Commit_key.t c
       | `Contents c -> str Contents_key.t c
       | `Contents_inlined c -> str Contents_key.t c

@@ -486,7 +486,7 @@ module Store_tc = struct
             match kinded_key with
             | None -> assert false
             | Some (`Contents (k, _)) -> get_volume_identifier k
-            | Some (`Node (k, _inlined)) -> get_volume_identifier k
+            | Some (`Node k) -> get_volume_identifier k
             | Some (`Contents_inlined _) ->
                 (* Inlined contents don't have their own key *)
                 assert false

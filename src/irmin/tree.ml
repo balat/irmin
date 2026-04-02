@@ -510,8 +510,7 @@ module Make (P : Backend.S) = struct
     type portable = Portable.t [@@deriving irmin ~equal ~pp]
 
     (* [elt] is a tree *)
-    type elt =
-      [ `Node of t * Contents.t list | `Contents of Contents.t * Metadata.t ]
+    type elt = [ `Node of t | `Contents of Contents.t * Metadata.t ]
 
     and update = Add of elt | Remove
     and updatemap = update StepMap.t
@@ -541,11 +540,11 @@ module Make (P : Backend.S) = struct
     let elt_t (t : t Type.t) : elt Type.t =
       let open Type in
       variant "Node.value" (fun node contents contents_m -> function
-        | `Node (x, il) -> node (x, il)
+        | `Node x -> node x
         | `Contents (c, m) ->
             if equal_metadata m Metadata.default then contents c
             else contents_m (c, m))
-      |~ case1 "Node" (pair t (list Contents.t)) (fun x -> `Node x)
+      |~ case1 "Node" t (fun x -> `Node x)
       |~ case1 "Contents" Contents.t (fun x -> `Contents (x, Metadata.default))
       |~ case1 "Contents-x" (pair Contents.t Metadata.t) (fun x -> `Contents x)
       |> sealv
@@ -642,9 +641,7 @@ module Make (P : Backend.S) = struct
     let rec clear_elt ~max_depth depth v =
       match v with
       | `Contents (c, _) -> if depth + 1 > max_depth then Contents.clear c
-      | `Node (t, il) ->
-          clear ~max_depth (depth + 1) t;
-          List.iter Contents.clear il
+      | `Node t -> clear ~max_depth (depth + 1) t
 
     and clear_info ~max_depth ~v depth i =
       let clear _ v = clear_elt ~max_depth depth v in
@@ -749,9 +746,7 @@ module Make (P : Backend.S) = struct
           type nonrec repo = repo
 
           let t ~env repo = function
-            | `Node (k, il) ->
-                `Node
-                  (of_key ~env repo k, List.map (Contents.of_key ~env repo) il)
+            | `Node k -> `Node (of_key ~env repo k)
             | `Contents (k, m) -> `Contents (Contents.of_key ~env repo k, m)
             | `Contents_inlined (bytes, m) ->
                 (* Deserialize the inlined bytes back to a content value *)
@@ -772,8 +767,7 @@ module Make (P : Backend.S) = struct
           type repo = unit
 
           let t ~env () = function
-            | `Node (h, il) ->
-                `Node (pruned ~env h, List.map (Contents.pruned ~env) il)
+            | `Node h -> `Node (pruned ~env h)
             | `Contents (h, m) -> `Contents (Contents.pruned ~env h, m)
             | `Contents_inlined (bytes, m) ->
                 (* Deserialize the inlined bytes back to a content value *)
@@ -975,8 +969,7 @@ module Make (P : Backend.S) = struct
 
     let weaken_value : node_value -> pnode_value = function
       | `Contents (key, m) -> `Contents (P.Contents.Key.to_hash key, m)
-      | `Node (key, il) ->
-          `Node (P.Node.Key.to_hash key, List.map P.Contents.Key.to_hash il)
+      | `Node key -> `Node (P.Node.Key.to_hash key)
       | `Contents_inlined (bytes, m) -> `Contents_inlined (bytes, m)
 
     let set_hash_cache ~cache t hash =
@@ -1021,7 +1014,7 @@ module Make (P : Backend.S) = struct
         bindings
         |> Seq.exists (fun (_, v) ->
                match v with
-               | `Node (n, _il) -> Option.is_none (cached_key n)
+               | `Node n -> Option.is_none (cached_key n)
                | `Contents (c, _) -> Option.is_none (Contents.cached_key c))
       in
       if must_build_portable_node then
@@ -1031,10 +1024,10 @@ module Make (P : Backend.S) = struct
             |> Seq.map (fun (step, v) ->
                    match v with
                    | `Contents (c, m) -> (step, `Contents (Contents.hash c, m))
-                   | `Node (n, _il) ->
-                       hash ~cache n (fun k -> (step, `Node (k, []))))
+                   | `Node n ->
+                       hash ~cache n (fun k -> (step, `Node k)))
           in
-          Portable.of_seq seq []
+          Portable.of_seq seq
         in
         k (Pnode pnode)
       else
@@ -1049,14 +1042,14 @@ module Make (P : Backend.S) = struct
                        | None ->
                            (* We checked that all child keys are cached above *)
                            assert false)
-                   | `Node (n, _il) -> (
+                   | `Node n -> (
                        match cached_key n with
-                       | Some k -> (step, `Node (k, []))
+                       | Some k -> (step, `Node k)
                        | None ->
                            (* We checked that all child keys are cached above *)
                            assert false))
           in
-          P.Node.Val.of_seq seq []
+          P.Node.Val.of_seq seq
         in
         if cache then Atomic.set t.info.value (Some node);
         k (Node node)
@@ -1069,11 +1062,10 @@ module Make (P : Backend.S) = struct
           match Contents.key c with
           | Some key -> k (Node_value (`Contents (key, m)))
           | None -> k (Pnode_value (`Contents (Contents.hash c, m))))
-      | `Node (n, _il) -> (
+      | `Node n -> (
           match key n with
-          | Some key -> k (Node_value (`Node (key, [])))
-          | None ->
-              hash ~cache n (fun hash -> k (Pnode_value (`Node (hash, [])))))
+          | Some key -> k (Node_value (`Node key))
+          | None -> hash ~cache n (fun hash -> k (Pnode_value (`Node hash))))
 
     and hash_preimage_of_updates : type r.
         cache:bool -> t -> hash_preimage -> updatemap -> (hash_preimage, r) cont
@@ -1247,7 +1239,7 @@ module Make (P : Backend.S) = struct
       ||
       match (x, y) with
       | `Contents x, `Contents y -> contents_equal x y
-      | `Node (x, _il), `Node (y, _il') -> equal x y
+      | `Node x, `Node y -> equal x y
       | `Contents _, `Node _ | `Node _, `Contents _ -> false
 
     and map_equal (x : map) (y : map) = StepMap.equal elt_equal x y
@@ -1506,7 +1498,7 @@ module Make (P : Backend.S) = struct
       in
       let rec aux : type r. (t, acc, r) cps_folder =
        fun ~path acc d t k ->
-        let apply acc = node path t acc |> tree path (`Node (t, [])) in
+        let apply acc = node path t acc |> tree path (`Node t) in
         let next acc =
           match force with
           | `True -> (
@@ -1589,7 +1581,7 @@ module Make (P : Backend.S) = struct
        fun ~path acc d (s, v) k ->
         let path = Path.rcons path s in
         match v with
-        | `Node (n, _il) -> (aux_uniq [@tailcall]) ~path acc (d + 1) n k
+        | `Node n -> (aux_uniq [@tailcall]) ~path acc (d + 1) n k
         | `Contents c -> (
             let apply () =
               let tree path = tree path (`Contents c) in
@@ -1790,15 +1782,15 @@ module Make (P : Backend.S) = struct
             in
             Merge.(f Contents.merge) ~old x y >>=* fun c ->
             Merge.ok (`Contents (c, m))
-        | `Node (x, _il), `Node (y, _il') ->
+        | `Node x, `Node y ->
             (merge [@tailcall]) (fun m ->
                 let old =
                   Merge.bind_promise old (fun old () ->
                       match old with
                       | `Contents _ -> ok None
-                      | `Node (n, _il) -> ok (Some n))
+                      | `Node n -> ok (Some n))
                 in
-                Merge.(f m ~old x y) >>=* fun n -> Merge.ok (`Node (n, [])))
+                Merge.(f m ~old x y) >>=* fun n -> Merge.ok (`Node n))
         | _ -> Merge.conflict "add/add values"
       in
       k (Merge.seq [ Merge.default elt_t; Merge.v elt_t f ])
@@ -1813,17 +1805,16 @@ module Make (P : Backend.S) = struct
   type kinded_key =
     [ `Contents of Contents.key * metadata
     | `Contents_inlined of string * metadata
-    | `Node of Node.key * Contents.key list ]
+    | `Node of Node.key ]
   [@@deriving irmin]
 
   type kinded_hash =
     [ `Contents of hash * metadata
     | `Contents_inlined of string * metadata
-    | `Node of hash * hash list ]
+    | `Node of hash ]
   [@@deriving irmin ~equal]
 
-  type t =
-    [ `Node of node * Contents.t list | `Contents of Contents.t * Metadata.t ]
+  type t = [ `Node of node | `Contents of Contents.t * Metadata.t ]
   [@@deriving irmin]
 
   let to_backend_node n =
@@ -1838,10 +1829,7 @@ module Make (P : Backend.S) = struct
     Node.of_value ~length ~env repo n
 
   let dump ppf = function
-    | `Node (n, il) ->
-        Fmt.pf ppf "node: %a - %a" Node.dump n
-          Fmt.Dump.(list (Type.pp Contents.t))
-          il
+    | `Node n -> Fmt.pf ppf "node: %a" Node.dump n
     | `Contents (c, _) -> Fmt.pf ppf "contents: %a" (Type.pp Contents.t) c
 
   let contents_equal ((c1, m1) as x1) ((c2, m2) as x2) =
@@ -1853,17 +1841,17 @@ module Make (P : Backend.S) = struct
     x == y
     ||
     match (x, y) with
-    | `Node (x, _xi), `Node (y, _yi) -> Node.equal x y
+    | `Node x, `Node y -> Node.equal x y
     | `Contents x, `Contents y -> contents_equal x y
     | `Node _, `Contents _ | `Contents _, `Node _ -> false
 
   let is_empty = function
-    | `Node (n, _il) -> Node.is_empty ~cache:true n
+    | `Node n -> Node.is_empty ~cache:true n
     | `Contents _ -> false
 
-  type elt = [ `Node of node * contents list | `Contents of contents * metadata ]
+  type elt = [ `Node of node | `Contents of contents * metadata ]
 
-  let of_node n = `Node (n, [])
+  let of_node n = `Node n
 
   let of_contents ?(metadata = Metadata.default) c =
     let env = Env.empty () in
@@ -1872,13 +1860,11 @@ module Make (P : Backend.S) = struct
 
   let v : elt -> t = function
     | `Contents (c, metadata) -> of_contents ~metadata c
-    | `Node (n, il) ->
-        `Node (n, List.map (Contents.of_value ~env:(Env.empty ())) il)
+    | `Node n -> `Node n
 
   let pruned_with_env ~env = function
     | `Contents (h, meta) -> `Contents (Contents.pruned ~env h, meta)
-    | `Node (h, il) ->
-        `Node (Node.pruned ~env h, List.map (Contents.pruned ~env) il)
+    | `Node h -> `Node (Node.pruned ~env h)
     | `Contents_inlined (bytes, meta) ->
         (* Deserialize inlined bytes to content value *)
         let of_bin = Type.(unstage (of_bin_string P.Contents.Val.t)) in
@@ -1897,7 +1883,7 @@ module Make (P : Backend.S) = struct
   let destruct x = x
 
   let clear ?(depth = 0) = function
-    | `Node (n, _il) -> Node.clear ~max_depth:depth 0 n
+    | `Node n -> Node.clear ~max_depth:depth 0 n
     | `Contents _ -> ()
 
   let sub ~cache ctx t path =
@@ -1907,10 +1893,10 @@ module Make (P : Backend.S) = struct
       | Some (h, p) -> (
           Node.findv ~cache ctx node h |> function
           | None | Some (`Contents _) -> None
-          | Some (`Node (n, _il)) -> (aux [@tailcall]) n p)
+          | Some (`Node n) -> (aux [@tailcall]) n p)
     in
     match t with
-    | `Node (n, _il) -> (aux [@tailcall]) n path
+    | `Node n -> (aux [@tailcall]) n path
     | `Contents _ -> None
 
   let find_tree (t : t) path =
@@ -1931,7 +1917,7 @@ module Make (P : Backend.S) = struct
     | `Contents (c, _) as c' ->
         let tree path = tree path c' in
         Contents.fold ~force ~cache ~path:Path.empty contents tree c acc
-    | `Node (n, _il) ->
+    | `Node n ->
         Node.fold ~order ~force ~cache ~uniq ~pre ~post ~path:Path.empty ?depth
           ~contents ~node ~tree n acc
 
@@ -2012,14 +1998,14 @@ module Make (P : Backend.S) = struct
   let list t ?offset ?length ?(cache = true) path =
     seq t ?offset ?length ~cache path |> List.of_seq
 
-  let empty () = `Node (Node.empty (), [])
+  let empty () = `Node (Node.empty ())
 
   let singleton k ?(metadata = Metadata.default) c =
     [%log.debug "Tree.singleton %a" pp_path k];
     let env = Env.empty () in
     let base_tree = `Contents (Contents.of_value ~env c, metadata) in
     Path.fold_right k
-      ~f:(fun step child -> `Node (Node.singleton ~env step child, []))
+      ~f:(fun step child -> `Node (Node.singleton ~env step child))
       ~init:base_tree
 
   (** During recursive updates, we keep track of whether or not we've made a
@@ -2031,11 +2017,11 @@ module Make (P : Backend.S) = struct
     if x == y then True
     else
       match (x, y) with
-      | `Node (x, _il), `Node (y, _il') -> Node.maybe_equal x y
+      | `Node x, `Node y -> Node.maybe_equal x y
       | _ -> if equal x y then True else False
 
   let get_env = function
-    | `Node (n, _il) -> n.Node.info.env
+    | `Node n -> n.Node.info.env
     | `Contents (c, _) -> c.Contents.info.env
 
   let update_tree ~cache ~f_might_return_empty_node ~(f : t option -> t option)
@@ -2050,7 +2036,7 @@ module Make (P : Backend.S) = struct
         let empty_tree =
           match is_empty root_tree with
           | true -> root_tree
-          | false -> `Node (Node.empty (), [])
+          | false -> `Node (Node.empty ())
         in
         match f (Some root_tree) with
         (* Here we consider "deleting" a root contents value or node to consist
@@ -2080,12 +2066,12 @@ module Make (P : Backend.S) = struct
               match (old_binding, new_binding) with
               | None, None -> k Unchanged
               | None, Some (`Contents _ as t) -> with_new_child t
-              | None, Some (`Node (n, _il) as t) -> (
+              | None, Some (`Node n as t) -> (
                   match prune_empty n with
                   | true -> k Unchanged
                   | false -> with_new_child t)
               | Some _, None -> Node.remove parent_node file |> changed
-              | Some old_value, Some (`Node (n, _il) as t) -> (
+              | Some old_value, Some (`Node n as t) -> (
                   match prune_empty n with
                   | true -> Node.remove parent_node file |> changed
                   | false -> (
@@ -2103,7 +2089,7 @@ module Make (P : Backend.S) = struct
               in
               let to_recurse =
                 match old_binding with
-                | Some (`Node (child, _il)) -> child
+                | Some (`Node child) -> child
                 | None | Some (`Contents _) -> Node.empty ()
               in
               (aux [@tailcall]) key_suffix to_recurse (function
@@ -2118,19 +2104,19 @@ module Make (P : Backend.S) = struct
                            binding [h], so we remove the binding. *)
                         Node.remove parent_node step |> changed
                     | false ->
-                        Node.add parent_node step (`Node (child, [])) |> changed
+                        Node.add parent_node step (`Node child) |> changed
                     ))
         in
         let top_node =
           match root_tree with
-          | `Node (n, _il) -> n
+          | `Node n -> n
           | `Contents _ -> Node.empty ()
         in
         aux path top_node @@ function
         | Unchanged -> root_tree
         | Changed node ->
             Env.copy ~into:node.info.env (get_env root_tree);
-            `Node (node, []))
+            `Node node)
 
   let update t k ?(metadata = Metadata.default) f =
     let cache = true in
@@ -2177,13 +2163,12 @@ module Make (P : Backend.S) = struct
             let env = Env.empty () in
             Some (`Contents (Contents.of_key ~env repo k, m))
         | false -> None)
-    | `Node (k, _il) -> (
+    | `Node k -> (
         Atomic.incr cnt.node_mem;
         P.Node.mem (P.Repo.node_t repo) k |> function
         | true ->
             let env = Env.empty () in
-            (* TODO inline *)
-            Some (`Node (Node.of_key ~env repo k, []))
+            Some (`Node (Node.of_key ~env repo k))
         | false -> None)
     | `Contents_inlined (bytes, m) ->
         (* Deserialize inlined bytes to content value *)
@@ -2198,8 +2183,8 @@ module Make (P : Backend.S) = struct
         Some (`Contents (Contents.of_value ~env value, m))
 
   let import_with_env ~env repo = function
-    | `Node (k, il) ->
-        `Node (Node.of_key ~env repo k, List.map (Contents.of_key ~env repo) il)
+    | `Node k ->
+        `Node (Node.of_key ~env repo k)
     | `Contents (k, m) -> `Contents (Contents.of_key ~env repo k, m)
     | `Contents_inlined (bytes, m) ->
         (* Deserialize inlined bytes to content value *)
@@ -2225,7 +2210,6 @@ module Make (P : Backend.S) = struct
      any un-persisted child values. *)
   let export ?clear repo contents_t node_t n =
     [%log.debug "Tree.export clear=%a" Fmt.(option bool) clear];
-    let n = (n, []) in
     let cache =
       match clear with
       | Some true | None ->
@@ -2236,7 +2220,7 @@ module Make (P : Backend.S) = struct
       | Some false -> true
     in
 
-    let add_node n v _to_inline k =
+    let add_node n v k =
       Atomic.incr cnt.node_add;
       let key = P.Node.add node_t v in
       let () =
@@ -2280,7 +2264,7 @@ module Make (P : Backend.S) = struct
             else None
     in
 
-    let add_node_map n (x : Node.map) to_inline k =
+    let add_node_map n (x : Node.map) k =
       let node_seq =
         (* Since we traverse in post-order, all children of [x] have already
            been added. Thus, their keys are cached and we can retrieve them. *)
@@ -2288,9 +2272,9 @@ module Make (P : Backend.S) = struct
         StepMap.to_seq x
         |> Seq.filter_map (fun (step, v) ->
                match v with
-               | `Node (n, _il) -> (
+               | `Node n -> (
                    match Node.cached_key n with
-                   | Some k -> Some (step, `Node (k, []))
+                   | Some k -> Some (step, `Node k)
                    | None ->
                        assertion_failure
                          "Encountered child node value with uncached key \
@@ -2311,21 +2295,19 @@ module Make (P : Backend.S) = struct
                               @ @[%a@]"
                              dump v)))
       in
-      let _, to_inline = List.split to_inline in
-      let node = P.Node.Val.of_seq node_seq to_inline in
-      add_node n node to_inline k
+      let node = P.Node.Val.of_seq node_seq in
+      add_node n node k
     in
 
-    let add_updated_node n (v : Node.value) (updates : Node.updatemap) to_inline
-        k =
+    let add_updated_node n (v : Node.value) (updates : Node.updatemap) k =
       let node_seq =
         StepMap.fold
           (fun k v acc ->
             match v with
             | Node.Remove -> P.Node.Val.remove acc k
-            | Node.Add (`Node (n, _il) as v) -> (
+            | Node.Add (`Node n as v) -> (
                 match Node.cached_key n with
-                | Some ptr -> P.Node.Val.add acc k (`Node (ptr, []))
+                | Some ptr -> P.Node.Val.add acc k (`Node ptr)
                 | None ->
                     assertion_failure
                       "Encountered child node value with uncached key during \
@@ -2348,12 +2330,11 @@ module Make (P : Backend.S) = struct
                           dump v)))
           updates v
       in
-      add_node n node_seq to_inline k
+      add_node n node_seq k
     in
 
-    let rec on_node : type r.
-        [ `Node of node * Contents.t list ] -> (node_key, r) cont =
-     fun (`Node (n, _il)) k ->
+    let rec on_node : type r. [ `Node of node ] -> (node_key, r) cont =
+     fun (`Node n) k ->
       let k key =
         (* All the nodes in the exported tree should be cleaned using
            [Node.export]. This ensures that [key] is stored in [n]. *)
@@ -2459,14 +2440,13 @@ module Make (P : Backend.S) = struct
                     in
                     Seq.map (fun (_, x) -> x) seq
                   in
-                  on_node_seq new_children_seq []
-                  @@ fun (`Node_children_exported to_inline) ->
+                  on_node_seq new_children_seq
+                  @@ fun `Node_children_exported ->
                   match (Atomic.get n.Node.v, Node.cached_value n) with
-                  | Map x, _ -> add_node_map n x to_inline k
-                  | Value (_, v, None), None | _, Some v ->
-                      add_node n v to_inline k
+                  | Map x, _ -> add_node_map n x k
+                  | Value (_, v, None), None | _, Some v -> add_node n v k
                   | Value (_, v, Some um), _ ->
-                      add_updated_node n v um to_inline k
+                      add_updated_node n v um k
                   | (Key _ | Portable_dirty _ | Pruned _), _ ->
                       (* [n.v = (Key _ | Portable_dirty _ | Pruned _)] is
                          excluded above. *)
@@ -2499,20 +2479,16 @@ module Make (P : Backend.S) = struct
           k `Content_exported
       | Contents.Pruned h -> pruned_hash_exn "export" h
     and on_node_seq : type r.
-        Node.elt Seq.t ->
-        (Contents.t * contents_key) List.t ->
-        ( [ `Node_children_exported of (Contents.t * contents_key) list ],
-          r )
-        cont =
-     fun seq to_inline k ->
+        Node.elt Seq.t -> ([ `Node_children_exported ], r) cont =
+     fun seq k ->
       match seq () with
       | Seq.Nil ->
           (* Have iterated on all children, let's export parent now *)
-          k (`Node_children_exported to_inline)
+          k `Node_children_exported
       | Seq.Cons ((`Node _ as n), rest) ->
-          on_node n (fun _node_key -> on_node_seq rest to_inline k)
+          on_node n (fun _node_key -> on_node_seq rest k)
       | Seq.Cons ((`Contents _ as c), rest) ->
-          on_contents c (fun `Content_exported -> on_node_seq rest to_inline k)
+          on_contents c (fun `Content_exported -> on_node_seq rest k)
     in
     let r = on_node (`Node n) (fun key -> key) in
     r
@@ -2535,7 +2511,7 @@ module Make (P : Backend.S) = struct
               (fun (acc, todo) (k, v) ->
                 let path = Path.rcons path k in
                 match v with
-                | `Node (v, _il) -> (acc, (path, v) :: todo)
+                | `Node v -> (acc, (path, v) :: todo)
                 | `Contents c -> ((path, c) :: acc, todo))
               (acc, todo) childs
           in
@@ -2590,7 +2566,7 @@ module Make (P : Backend.S) = struct
             | `Left (`Contents x) ->
                 let x = removed !acc (path, x) in
                 acc := x
-            | `Left (`Node (x, _il)) ->
+            | `Left (`Node x) ->
                 let xs = entries path x in
                 let xs = List.fold_left removed !acc xs in
                 acc := xs
@@ -2598,19 +2574,19 @@ module Make (P : Backend.S) = struct
             | `Right (`Contents y) ->
                 let y = added !acc (path, y) in
                 acc := y
-            | `Right (`Node (y, _il)) ->
+            | `Right (`Node y) ->
                 let ys = entries path y in
                 let ys = List.fold_left added !acc ys in
                 acc := ys
             (* Both *)
-            | `Both (`Node (x, _il), `Node (y, _il')) ->
+            | `Both (`Node x, `Node y) ->
                 todo := (path, x, y) :: !todo
-            | `Both (`Contents x, `Node (y, _il)) ->
+            | `Both (`Contents x, `Node y) ->
                 let ys = entries path y in
                 let x = removed !acc (path, x) in
                 let ys = List.fold_left added x ys in
                 acc := ys
-            | `Both (`Node (x, _il), `Contents y) ->
+            | `Both (`Node x, `Contents y) ->
                 let xs = entries path x in
                 let y = added !acc (path, y) in
                 let ys = List.fold_left removed y xs in
@@ -2644,12 +2620,12 @@ module Make (P : Backend.S) = struct
           let c1 = Contents.to_value ~cache:true c1 |> get_ok "diff" in
           let c2 = Contents.to_value ~cache:true c2 |> get_ok "diff" in
           [ (Path.empty, `Updated ((c1, m1), (c2, m2))) ]
-    | `Node (x, _il), `Node (y, _il') -> diff_node x y
-    | `Contents (x, m), `Node (y, _il) ->
+    | `Node x, `Node y -> diff_node x y
+    | `Contents (x, m), `Node y ->
         let diff = diff_node (Node.empty ()) y in
         let x = Contents.to_value ~cache:true x |> get_ok "diff" in
         (Path.empty, `Removed (x, m)) :: diff
-    | `Node (x, _il), `Contents (y, m) ->
+    | `Node x, `Contents (y, m) ->
         let diff = diff_node x (Node.empty ()) in
         let y = Contents.to_value ~cache:true y |> get_ok "diff" in
         (Path.empty, `Added (y, m)) :: diff
@@ -2669,7 +2645,7 @@ module Make (P : Backend.S) = struct
       | `Tree childs ->
           tree StepMap.empty childs (function
             | Empty -> k Empty
-            | Non_empty n -> k (Non_empty (`Node (n, []))))
+            | Non_empty n -> k (Non_empty (`Node n)))
     and tree : type r.
         Node.elt StepMap.t -> (step * concrete) list -> (node or_empty, r) cont
         =
@@ -2702,7 +2678,7 @@ module Make (P : Backend.S) = struct
      fun t k ->
       match t with
       | `Contents c -> contents c k
-      | `Node (n, _il) ->
+      | `Node n ->
           let m = Node.to_map ~cache:true n in
           let bindings = m |> get_ok "to_concrete" |> StepMap.bindings in
           (node [@tailcall]) [] bindings (fun n ->
@@ -2732,9 +2708,9 @@ module Make (P : Backend.S) = struct
   let key (t : t) =
     [%log.debug "Tree.key"];
     match t with
-    | `Node (n, _il) -> (
+    | `Node n -> (
         match Node.key n with
-        | Some key -> Some (`Node (key, []))
+        | Some key -> Some (`Node key)
         | None -> None)
     | `Contents (c, m) -> (
         match Contents.key c with
@@ -2744,8 +2720,7 @@ module Make (P : Backend.S) = struct
   let hash ?(cache = true) (t : t) =
     [%log.debug "Tree.hash"];
     match t with
-    | `Node (n, il) ->
-        `Node (Node.hash ~cache n, List.map (Contents.hash ~cache) il)
+    | `Node n -> `Node (Node.hash ~cache n)
     | `Contents (c, m) -> `Contents (Contents.hash ~cache c, m)
 
   let stats ?(force = false) (t : t) =
@@ -2762,7 +2737,7 @@ module Make (P : Backend.S) = struct
 
   let inspect = function
     | `Contents _ -> `Contents
-    | `Node (n, _il) ->
+    | `Node n ->
         `Node
           (match Atomic.get n.Node.v with
           | Map _ -> `Map
@@ -2790,7 +2765,7 @@ module Make (P : Backend.S) = struct
      fun tree k ->
       match tree with
       | `Contents (c, h) -> proof_of_contents c h k
-      | `Node (node, _il) -> proof_of_node node k
+      | `Node node -> proof_of_node node k
 
     and proof_of_contents : type a.
         Contents.t -> metadata -> (proof_tree -> a) -> a =
@@ -2900,7 +2875,7 @@ module Make (P : Backend.S) = struct
         =
      fun ~env p k ->
       match p with
-      | Blinded_node h -> k (`Node (h, []))
+      | Blinded_node h -> k (`Node h)
       | Node n -> load_node_proof ~env n k
       | Inode { length; proofs } -> load_inode_proof ~env length proofs k
       | Blinded_contents (h, m) -> k (`Contents (h, m))
@@ -2925,7 +2900,7 @@ module Make (P : Backend.S) = struct
           in
           let h = P.Node_portable.hash_exn v in
           Env.add_pnode_from_proof env h v;
-          k (`Node (h, [])))
+          k (`Node h))
 
     and proof_of_extender len segments p : node_proof =
       List.fold_left
@@ -2940,7 +2915,7 @@ module Make (P : Backend.S) = struct
         | [] ->
             let h = P.Node_portable.hash_exn acc in
             Env.add_pnode_from_proof env h acc;
-            k (`Node (h, []))
+            k (`Node h)
         | (s, p) :: rest ->
             let k h = aux (P.Node_portable.add acc s h) rest in
             load_proof ~env p k
@@ -2964,7 +2939,7 @@ module Make (P : Backend.S) = struct
             in
             let h = P.Node_portable.hash_exn v in
             Env.add_pnode_from_proof env h v;
-            k (`Node (h, []))
+            k (`Node h)
         | (i, p) :: rest ->
             let k p = aux ((i, p) :: acc) rest in
             node_proof_of_proof ~env p k

@@ -187,20 +187,20 @@ module type Sigs = sig
         * [< `Contents of XKey.t
           | `Contents_inlined of string * _
           | `Inode of XKey.t
-          | `Node of XKey.t * XKey.t list ])
+          | `Node of XKey.t ])
         list) ->
       iter:
         (contents:(XKey.hash Pack_key.t -> unit) ->
-        node:(XKey.t * XKey.t list -> unit) ->
+        node:(XKey.t -> unit) ->
         pred_node:
           (X.Repo.t ->
-          XKey.t * XKey.t list ->
+          XKey.t ->
           [> `Contents of XKey.t
           | `Contents_inlined of XKey.t
-          | `Node of XKey.t * XKey.t list ]
+          | `Node of XKey.t ]
           list) ->
         pred_commit:
-          (X.Repo.t -> XKey.t -> [> `Node of XKey.t * XKey.t list ] list) ->
+          (X.Repo.t -> XKey.t -> [> `Node of XKey.t ] list) ->
         X.Repo.t ->
         unit) ->
       check:
@@ -217,13 +217,13 @@ module type Sigs = sig
       iter:
         (pred_node:
            (X.Repo.t ->
-           XKey.t * XKey.t list ->
-           ([> `Contents of XKey.t | `Node of XKey.t * XKey.t list ] as 'a) list) ->
-        node:(XKey.t * XKey.t list -> unit) ->
+           XKey.t ->
+           ([> `Contents of XKey.t | `Node of XKey.t ] as 'a) list) ->
+        node:(XKey.t -> unit) ->
         commit:(XKey.t -> unit) ->
         X.Repo.t ->
         unit) ->
-      pred:(X.Repo.t -> XKey.t * XKey.t list -> 'a list) ->
+      pred:(X.Repo.t -> XKey.t -> 'a list) ->
       check:(XKey.t -> (unit, string) result) ->
       X.Repo.t ->
       ([> `No_error ], [> `Cannot_fix of string ]) result

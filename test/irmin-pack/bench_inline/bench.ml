@@ -77,7 +77,7 @@ let count_inlined repo =
   let tree = S.Commit.tree head in
   let root_node =
     match S.Tree.destruct tree with
-    | `Node (n, _) -> S.to_backend_node n
+    | `Node n -> S.to_backend_node n
     | `Contents _ -> failwith "Expected root to be a node"
   in
   let entries = S.Backend.Node.Val.list root_node in

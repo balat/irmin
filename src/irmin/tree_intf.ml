@@ -55,7 +55,7 @@ module type S = sig
   val of_node : node -> t
   (** [of_node n] is the subtree built from the node [n]. *)
 
-  type elt = [ `Node of node * contents list | `Contents of contents * metadata ]
+  type elt = [ `Node of node | `Contents of contents * metadata ]
   (** The type for tree elements. *)
 
   val v : elt -> t
@@ -64,7 +64,7 @@ module type S = sig
   type kinded_hash =
     [ `Contents of hash * metadata
     | `Contents_inlined of string * metadata
-    | `Node of hash * hash list ]
+    | `Node of hash ]
   [@@deriving irmin]
 
   val pruned : kinded_hash -> t
@@ -249,7 +249,7 @@ module type S = sig
   (** {1 Folds} *)
 
   val destruct :
-    t -> [ `Node of node * Contents.t list | `Contents of Contents.t * metadata ]
+    t -> [ `Node of node | `Contents of Contents.t * metadata ]
   (** General-purpose destructor for trees. *)
 
   type marks
@@ -462,7 +462,7 @@ module type Sigs = sig
     type kinded_key =
       [ `Contents of B.Contents.Key.t * metadata
       | `Contents_inlined of string * metadata
-      | `Node of B.Node.Key.t * B.Contents.Key.t list ]
+      | `Node of B.Node.Key.t ]
     [@@deriving irmin]
 
     val import : B.Repo.t -> kinded_key -> t option

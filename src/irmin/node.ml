@@ -58,10 +58,7 @@ module Of_core (S : Core) = struct
         merge_metadata merge_key)
 
   let merge_node merge_key =
-    Merge.alist S.step_t
-      (Type.pair S.node_key_t (Type.list S.contents_key_t))
-      (fun _step -> merge_key)
-  (* TODO: inline *)
+    Merge.alist S.step_t S.node_key_t (fun _step -> merge_key)
 
   (* FIXME: this is very broken; do the same thing as [Tree.merge]
      instead. *)
@@ -70,7 +67,7 @@ module Of_core (S : Core) = struct
     let implode (contents, succ) =
       let xs = List.rev_map (fun (s, c) -> (s, `Contents c)) contents in
       let ys = List.rev_map (fun (s, n) -> (s, `Node n)) succ in
-      S.of_list (xs @ ys) []
+      S.of_list (xs @ ys)
     in
     let merge = Merge.pair (merge_contents contents) (merge_node node) in
     Merge.like S.t merge explode implode
@@ -119,18 +116,17 @@ struct
     type t = Path.step [@@deriving irmin ~compare]
   end)
 
-  type ('h, 'hi) node_entry = { name : Path.step; node : 'h; inlined : 'hi }
-  [@@deriving irmin]
+  type 'h node_entry = { name : Path.step; node : 'h } [@@deriving irmin]
 
   type entry =
-    | Node of (node_key, contents_key list) node_entry
+    | Node of node_key node_entry
     | Contents of contents_key contents_entry
     | Contents_m of contents_key contents_m_entry
     | Contents_inlined of contents_key contents_entry
     | Contents_inlined_value of contents_inlined_value_entry
     (* Invariant: the [_hash] cases are only externally reachable via
        [Portable.of_node]. *)
-    | Node_hash of (Hash.t, Hash.t list) node_entry
+    | Node_hash of Hash.t node_entry
     | Contents_hash of Hash.t contents_entry
     | Contents_m_hash of Hash.t contents_m_entry
     | Contents_inlined_hash of Hash.t contents_entry
@@ -141,25 +137,23 @@ struct
   type value =
     [ `Contents of contents_key * metadata
     | `Contents_inlined of string * metadata
-    | `Node of node_key * contents_key list ]
+    | `Node of node_key ]
 
   type weak_value =
     [ `Contents of hash * metadata
     | `Contents_inlined of string * metadata
-    | `Node of hash * hash list ]
+    | `Node of hash ]
   [@@deriving irmin]
 
   (* FIXME:  special-case the default metadata in the default signature? *)
   let value_t =
     let open Type in
     variant "value" (fun n c x ci -> function
-      | `Node (h, l) -> n (h, l)
+      | `Node h -> n h
       | `Contents (h, m) ->
           if equal_metadata m Metadata.default then c h else x (h, m)
       | `Contents_inlined (v, m) -> ci (v, m))
-    |~ case1 "node"
-         (pair node_key_t (list contents_key_t))
-         (fun (k, ic) -> `Node (k, ic))
+    |~ case1 "node" node_key_t (fun k -> `Node k)
     |~ case1 "contents" contents_key_t (fun h ->
         `Contents (h, Metadata.default))
     |~ case1 "contents-x" (pair contents_key_t Metadata.t) (fun (h, m) ->
@@ -170,7 +164,7 @@ struct
 
   let to_entry (k, (v : value)) =
     match v with
-    | `Node (h, ic) -> Node { name = k; node = h; inlined = ic }
+    | `Node h -> Node { name = k; node = h }
     | `Contents (h, m) ->
         if equal_metadata m Metadata.default then
           Contents { name = k; contents = h }
@@ -179,7 +173,7 @@ struct
         Contents_inlined_value { name = k; value; metadata }
 
   let inspect_nonportable_entry_exn : entry -> step * value = function
-    | Node n -> (n.name, `Node (n.node, n.inlined))
+    | Node n -> (n.name, `Node n.node)
     | Contents c -> (c.name, `Contents (c.contents, Metadata.default))
     | Contents_m c -> (c.name, `Contents (c.contents, c.metadata))
     | Contents_inlined_value c ->
@@ -203,12 +197,8 @@ struct
         name
 
   let weak_of_entry : entry -> step * weak_value = function
-    | Node n ->
-        ( n.name,
-          `Node
-            (Node_key.to_hash n.node, List.map Contents_key.to_hash n.inlined)
-        )
-    | Node_hash n -> (n.name, `Node (n.node, n.inlined))
+    | Node n -> (n.name, `Node (Node_key.to_hash n.node))
+    | Node_hash n -> (n.name, `Node n.node)
     | Contents c ->
         (c.name, `Contents (Contents_key.to_hash c.contents, Metadata.default))
     | Contents_m c ->
@@ -220,12 +210,12 @@ struct
     | Contents_inlined _c -> assert false
     | Contents_inlined_hash _c -> assert false
 
-  let of_seq l _to_inline =
+  let of_seq l =
     Seq.fold_left
       (fun acc x -> StepMap.add (fst x) (to_entry x) acc)
       StepMap.empty l
 
-  let of_list l to_inline = of_seq (List.to_seq l) to_inline
+  let of_list l = of_seq (List.to_seq l)
 
   let seq_entries ~offset ?length (t : t) =
     let take seq = match length with None -> seq | Some n -> Seq.take n seq in
@@ -267,7 +257,7 @@ struct
 
   module Hash_preimage = struct
     type entry =
-      | Node_hash of (Hash.t, Hash.t list) node_entry
+      | Node_hash of Hash.t node_entry
       | Contents_hash of Hash.t contents_entry
       | Contents_m_hash of Hash.t contents_m_entry
       | Contents_inlined_hash of Hash.t contents_entry
@@ -297,21 +287,16 @@ struct
       |> Seq.map (fun (_, v) ->
              match v with
              (* Weaken keys to hashes *)
-             | Node { name; node; inlined } ->
+             | Node { name; node } ->
                  Hash_preimage.Node_hash
-                   {
-                     name;
-                     node = Node_key.to_hash node;
-                     inlined = List.map Contents_key.to_hash inlined;
-                   }
+                   { name; node = Node_key.to_hash node }
              | Contents { name; contents } ->
                  Contents_hash
                    { name; contents = Contents_key.to_hash contents }
              | Contents_m { metadata; name; contents } ->
                  Contents_m_hash
                    { metadata; name; contents = Contents_key.to_hash contents }
-             | Node_hash { name; node; inlined } ->
-                 Node_hash { name; node; inlined }
+             | Node_hash { name; node } -> Node_hash { name; node }
              | Contents_hash { name; contents } ->
                  Contents_hash { name; contents }
              | Contents_m_hash { metadata; name; contents } ->
@@ -383,7 +368,7 @@ module Portable = struct
       assert (depth = 0);
       match t with
       | `Blinded _ | `Inode _ -> None
-      | `Values e -> Some (of_list e [])
+      | `Values e -> Some (of_list e)
   end
 
   module Of_node (X : S) = struct
@@ -417,8 +402,7 @@ struct
 
       let to_entry name v =
         match v with
-        | `Node (node, to_inline) ->
-            Node_hash { name; node; inlined = to_inline }
+        | `Node node -> Node_hash { name; node }
         | `Contents (contents, metadata) ->
             if equal_metadata metadata Metadata.default then
               Contents_hash { name; contents }
@@ -426,12 +410,12 @@ struct
         | `Contents_inlined (value, metadata) ->
             Contents_inlined_value { name; value; metadata }
 
-      let of_seq s _to_inline =
+      let of_seq s =
         Seq.fold_left
           (fun acc (name, v) -> StepMap.add name (to_entry name v) acc)
           StepMap.empty s
 
-      let of_list s to_inline = of_seq (List.to_seq s) to_inline
+      let of_list s = of_seq (List.to_seq s)
 
       let add t name v =
         let entry = to_entry name v in
@@ -541,20 +525,17 @@ struct
   let rec merge t =
     let merge_key =
       Merge.v
-        (Repr.option (Repr.pair Key.t (Repr.list C.Key.t)))
+        (Repr.option Key.t)
         (fun ~old x y -> Merge.(f (merge t)) ~old x y)
     in
     let merge = Val.merge ~contents:C.(merge (fst t)) ~node:merge_key in
     let read = function
       | None -> Val.empty ()
-      | Some (k, _il) -> (
+      | Some k -> (
           match find t k with None -> Val.empty () | Some v -> v)
     in
-    (* TODO inline *)
-    let add v = if Val.is_empty v then None else Some (add t v, []) in
-    Merge.like_blocking
-      (Repr.option (Repr.pair Key.t (Repr.list C.Key.t)))
-      merge read add
+    let add v = if Val.is_empty v then None else Some (add t v) in
+    Merge.like_blocking (Repr.option Key.t) merge read add
 end
 
 module Generic_key = struct
@@ -594,7 +575,7 @@ module Graph (S : Store) = struct
   type value =
     [ `Contents of contents_key * metadata
     | `Contents_inlined of string * metadata
-    | `Node of node_key * contents_key list ]
+    | `Node of node_key ]
 
   let empty t = S.add t (S.Val.empty ())
 
@@ -611,28 +592,27 @@ module Graph (S : Store) = struct
   let edges t =
     List.filter_map
       (function
-        | _, `Node (n, il) -> Some (`Node (n, il))
+        | _, `Node n -> Some (`Node n)
         | _, `Contents (c, _) -> Some (`Contents c)
         | _, `Contents_inlined _ -> None)
       (S.Val.list t)
 
   let pp_key = Type.pp S.Key.t
 
-  let pp_keys =
-    Fmt.(Dump.list (Dump.pair pp_key (Dump.list (Type.pp S.Contents.Key.t))))
+  let pp_keys = Fmt.(Dump.list pp_key)
 
   let pp_path = Type.pp S.Path.t
   let equal_val = Type.(unstage (equal S.Val.t))
 
   let pred t = function
-    | `Node (k, _il) -> (
+    | `Node k -> (
         match S.find t k with None -> [] | Some v -> edges v)
     | _ -> []
 
   let closure t ~min ~max =
     [%log.debug "closure min=%a max=%a" pp_keys min pp_keys max];
-    let min = List.rev_map (fun (x, il) -> `Node (x, il)) min in
-    let max = List.rev_map (fun (x, il) -> `Node (x, il)) max in
+    let min = List.rev_map (fun x -> `Node x) min in
+    let max = List.rev_map (fun x -> `Node x) max in
     let g = Graph.closure ~pred:(pred t) ~min ~max () in
     List.fold_left
       (fun acc -> function `Node x -> x :: acc | _ -> acc)
@@ -662,7 +642,7 @@ module Graph (S : Store) = struct
     in
     Graph.iter ~pred:(pred t) ~min ~max ~node ?edge ~skip ~rev ()
 
-  let v t xs to_inline = S.add t (S.Val.of_list xs to_inline)
+  let v t xs = S.add t (S.Val.of_list xs)
 
   let find_step t node step =
     [%log.debug "contents %a" pp_key node];
@@ -672,11 +652,11 @@ module Graph (S : Store) = struct
     [%log.debug "read_node_exn %a %a" pp_key node pp_path path];
     let rec aux node path =
       match Path.decons path with
-      | None -> Some (`Node (node, []))
+      | None -> Some (`Node node)
       | Some (h, tl) -> (
           match find_step t node h with
           | (None | Some (`Contents _) | Some (`Contents_inlined _)) as x -> x
-          | Some (`Node (node, _)) -> aux node tl)
+          | Some (`Node node) -> aux node tl)
     in
     aux node path
 
@@ -688,7 +668,7 @@ module Graph (S : Store) = struct
     let old_node =
       match old_key with
       | None | Some (`Contents _) | Some (`Contents_inlined _) -> S.Val.empty ()
-      | Some (`Node (k, _)) -> (
+      | Some (`Node k) -> (
           match S.find t k with None -> S.Val.empty () | Some v -> v)
     in
     let new_node = f old_node in
@@ -698,7 +678,7 @@ module Graph (S : Store) = struct
       if S.Val.is_empty node then S.Val.empty () else node
     else
       let k = S.add t new_node in
-      S.Val.add node label (`Node (k, []))
+      S.Val.add node label (`Node k)
 
   let map t node path f =
     [%log.debug "map %a %a" pp_key node pp_path path];
@@ -718,7 +698,7 @@ module Graph (S : Store) = struct
     | Some (path, file) -> map t node path (fun node -> S.Val.add node file n)
     | None -> (
         match n with
-        | `Node (n, _) -> n
+        | `Node n -> n
         | `Contents _ | `Contents_inlined _ -> failwith "TODO: Node.add")
 
   let rdecons_exn path =
@@ -786,13 +766,13 @@ module V1 (N : Generic_key.S with type step = string) = struct
   let hash_exn ?force t = N.hash_exn ?force t.n
   let head t = N.head t.n
 
-  let of_seq entries to_inline =
-    let n = N.of_seq entries to_inline in
+  let of_seq entries =
+    let n = N.of_seq entries in
     let entries = List.of_seq entries in
     { n; entries }
 
-  let of_list entries to_inline =
-    let n = N.of_list entries to_inline in
+  let of_list entries =
+    let n = N.of_list entries in
     { n; entries }
 
   let seq ?(offset = 0) ?length ?cache:_ t =
@@ -835,7 +815,7 @@ module V1 (N : Generic_key.S with type step = string) = struct
         match (contents, metadata, node) with
         | Some c, None, None -> `Contents (c, Metadata.default)
         | Some c, Some m, None -> `Contents (c, m)
-        | None, None, Some n -> `Node (n, [])
+        | None, None, Some n -> `Node n
         | _ -> failwith "invalid node")
     |+ field "contents" (option Contents_key.t) (function
       | `Contents (x, _) -> Some x
@@ -844,14 +824,14 @@ module V1 (N : Generic_key.S with type step = string) = struct
       | `Contents (_, x) when not (is_default x) -> Some x
       | _ -> None)
     |+ field "node" (option Node_key.t) (function
-         | `Node (n, _) -> Some n
+         | `Node n -> Some n
          | _ -> None)
     |> sealr
 
   let t : t Type.t =
     Type.map
       Type.(list ~len:`Int64 (pair step_t value_t))
-      (fun l -> of_list l [])
+      (fun l -> of_list l)
       list
 
   let merge ~contents ~node =

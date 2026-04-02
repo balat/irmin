@@ -566,7 +566,7 @@ struct
           module Hash = Hash
         end) in
         let t = Stats.v () in
-        let pred_node repo (k, _il) =
+        let pred_node repo k =
           match X.Node.find (X.Repo.node_t repo) k with
           | None -> Fmt.failwith "key %a not found" pp_key k
           | Some v ->
@@ -578,7 +578,7 @@ struct
                 |> List.filter_map (function
                      | s, `Contents h -> Some (s, `Contents (XKey.to_hash h))
                      | s, `Inode h -> Some (s, `Inode (XKey.to_hash h))
-                     | s, `Node (h, _il) -> Some (s, `Node (XKey.to_hash h))
+                     | s, `Node h -> Some (s, `Node (XKey.to_hash h))
                      | _, `Contents_inlined _ ->
                          (* Inlined contents don't have their own key *)
                          None)
@@ -588,7 +588,7 @@ struct
                 (function
                   | s, `Inode x ->
                       assert (s = None);
-                      Some (`Node (x, []))
+                      Some (`Node x)
                   | _, `Node x -> Some (`Node x)
                   | _, `Contents x -> Some (`Contents x)
                   | _, `Contents_inlined _ ->
@@ -603,7 +603,7 @@ struct
           | Some c ->
               let node = X.Commit.Val.node c in
               Stats.visit_commit t (XKey.to_hash node);
-              [ `Node (node, []) ]
+              [ `Node node ]
         in
         let pred_contents _repo k =
           Stats.visit_contents t (XKey.to_hash k);
@@ -749,7 +749,7 @@ struct
           | `Contents _ -> Fmt.failwith "[root_key] cannot be of type contents"
           | `Contents_inlined _ ->
               Fmt.failwith "[root_key] cannot be of type inlined contents"
-          | `Node (key, _il) ->
+          | `Node key ->
               let total =
                 Export.run ?on_disk export f_contents f_nodes
                   (key, Pack_value.Kind.Inode_v2_root)

@@ -210,7 +210,7 @@ let test_inlining_structure ~fs () =
   (* Get the root node using to_backend_node *)
   let root_node =
     match S.Tree.destruct tree' with
-    | `Node (n, _inlined) -> S.to_backend_node n
+    | `Node n -> S.to_backend_node n
     | `Contents _ -> Alcotest.fail "Expected a node"
   in
   (* Check the node structure using list *)

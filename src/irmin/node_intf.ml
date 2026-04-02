@@ -36,7 +36,7 @@ module type Core = sig
   (** The type for steps between nodes. *)
 
   type value =
-    [ `Node of node_key * contents_key list
+    [ `Node of node_key
     | `Contents of contents_key * metadata
     | `Contents_inlined of string * metadata ]
   [@@deriving irmin]
@@ -46,7 +46,7 @@ module type Core = sig
   type hash [@@deriving irmin]
   (** The type of hashes of values. *)
 
-  val of_list : (step * value) list -> contents_key list -> t
+  val of_list : (step * value) list -> t
   (** [of_list l] is the node [n] such that [list n = l]. *)
 
   val list :
@@ -54,7 +54,7 @@ module type Core = sig
   (** [list t] is the contents of [t]. [offset] and [length] are used to
       paginate results. *)
 
-  val of_seq : (step * value) Seq.t -> contents_key list -> t
+  val of_seq : (step * value) Seq.t -> t
   (** [of_seq s] is the node [n] such that [seq n = s]. *)
 
   val seq :
@@ -154,7 +154,7 @@ module type S_generic_key = sig
 
   val merge :
     contents:contents_key option Merge.t ->
-    node:(node_key * contents_key list) option Merge.t ->
+    node:node_key option Merge.t ->
     t Merge.t
   (** [merge] is the merge function for nodes. *)
 
@@ -190,7 +190,7 @@ module type Portable = sig
 
   val merge :
     contents:contents_key option Merge.t ->
-    node:(node_key * contents_key list) option Merge.t ->
+    node:node_key option Merge.t ->
     t Merge.t
   (** [merge] is the merge function for nodes. *)
 
@@ -264,7 +264,7 @@ module type Store = sig
   module Contents : Contents.Store with type key = Val.contents_key
   (** [Contents] is the underlying contents store. *)
 
-  val merge : [> read_write ] t -> (key * Contents.key list) option Merge.t
+  val merge : [> read_write ] t -> key option Merge.t
   (** [merge] is the 3-way merge function for nodes keys. *)
 end
 
@@ -290,7 +290,7 @@ module type Graph = sig
   (** The type of store paths. A path is composed of {{!step} steps}. *)
 
   type value =
-    [ `Node of node_key * contents_key list
+    [ `Node of node_key
     | `Contents of contents_key * metadata
     | `Contents_inlined of string * metadata ]
   [@@deriving irmin]
@@ -299,7 +299,7 @@ module type Graph = sig
   val empty : [> write ] t -> node_key
   (** The empty node. *)
 
-  val v : [> write ] t -> (step * value) list -> contents_key list -> node_key
+  val v : [> write ] t -> (step * value) list -> node_key
   (** [v t n] is a new node containing [n]. *)
 
   val list : [> read ] t -> node_key -> (step * value) list
@@ -318,9 +318,9 @@ module type Graph = sig
 
   val closure :
     [> read ] t ->
-    min:(node_key * contents_key list) list ->
-    max:(node_key * contents_key list) list ->
-    (node_key * contents_key list) list
+    min:node_key list ->
+    max:node_key list ->
+    node_key list
   (** [closure t min max] is the unordered list of nodes [n] reachable from a
       node of [max] along a path which: (i) either contains no [min] or (ii) it
       ends with a [min].
@@ -329,12 +329,12 @@ module type Graph = sig
 
   val iter :
     [> read ] t ->
-    min:(node_key * contents_key list) list ->
-    max:(node_key * contents_key list) list ->
-    ?node:(node_key * contents_key list -> unit) ->
+    min:node_key list ->
+    max:node_key list ->
+    ?node:(node_key -> unit) ->
     ?contents:(contents_key -> unit) ->
-    ?edge:(node_key * contents_key list -> node_key * contents_key list -> unit) ->
-    ?skip_node:(node_key * contents_key list -> bool) ->
+    ?edge:(node_key -> node_key -> unit) ->
+    ?skip_node:(node_key -> bool) ->
     ?skip_contents:(contents_key -> bool) ->
     ?rev:bool ->
     unit ->

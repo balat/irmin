@@ -73,13 +73,12 @@ struct
 
     let unsafe_keyvalue_of_hashvalue = function
       | `Contents (h, m) -> `Contents (Key.unfindable_of_hash h, m)
-      | `Node (h, il) ->
-          `Node (Key.unfindable_of_hash h, List.map Key.unfindable_of_hash il)
+      | `Node h -> `Node (Key.unfindable_of_hash h)
       | `Contents_inlined (bytes, m) -> `Contents_inlined (bytes, m)
 
     let hashvalue_of_keyvalue = function
       | `Contents (k, m) -> `Contents (Key.to_hash k, m)
-      | `Node (k, il) -> `Node (Key.to_hash k, List.map Key.to_hash il)
+      | `Node k -> `Node (Key.to_hash k)
       | `Contents_inlined (bytes, m) -> `Contents_inlined (bytes, m)
   end
 
@@ -993,7 +992,7 @@ struct
         | Contents of contents_key
         | Contents_x of metadata * contents_key
         | Contents_inlined_value of string * metadata
-        | Node of node_key * contents_key list
+        | Node of node_key
       [@@deriving irmin]
 
       type entry = { name : step; key : kinded_key } [@@deriving irmin]
@@ -1013,8 +1012,7 @@ struct
             if T.equal_metadata m Metadata.default then
               { name; key = Contents contents_key }
             else { name; key = Contents_x (m, contents_key) }
-        | `Node (node_key, inlined_keys) ->
-            { name; key = Node (node_key, inlined_keys) }
+        | `Node node_key -> { name; key = Node node_key }
         | `Contents_inlined (bytes, m) ->
             { name; key = Contents_inlined_value (bytes, m) }
 
@@ -1024,7 +1022,7 @@ struct
           | Contents key -> `Contents (key, Metadata.default)
           | Contents_x (m, key) -> `Contents (key, m)
           | Contents_inlined_value (bytes, m) -> `Contents_inlined (bytes, m)
-          | Node (key, inlined_keys) -> `Node (key, inlined_keys) )
+          | Node key -> `Node key )
 
       type error =
         [ `Invalid_hash of hash * hash * t
@@ -1210,7 +1208,7 @@ struct
            [of_proof]. *)
         if should_be_stable ~length ~root:(depth = 0) then
           (* [seq_v] may call [find], even if some branches are blinded *)
-          let node = Node.of_seq (seq_v la v) [] in
+          let node = Node.of_seq (seq_v la v) in
           Node.hash node
         else hash v
       in
@@ -1250,7 +1248,7 @@ struct
           Val_ref.of_hash
             (lazy
               (let vs = seq layout ~cache:false t in
-               Node.hash (Node.of_seq vs [])))
+               Node.hash (Node.of_seq vs)))
         in
         { v_ref; v = t.v; root = true }
 
@@ -1281,7 +1279,7 @@ struct
     let recompute_hash layout t =
       if is_stable t then
         let vs = seq layout ~cache:false t in
-        Node.hash (Node.of_seq vs [])
+        Node.hash (Node.of_seq vs)
       else
         let v = to_bin_v layout Bin.Ptr_any t.v in
         let hash = Bin.V.hash v in
@@ -1437,7 +1435,7 @@ struct
       | None -> t
       | Some _ -> remove layout t s k Fun.id |> stabilize_root layout
 
-    let of_seq la l _to_inline =
+    let of_seq la l =
       let t =
         let rec aux_big seq inode =
           match seq () with
@@ -1605,7 +1603,7 @@ struct
       type value =
         [ `Contents of hash * metadata
         | `Contents_inlined of string * metadata
-        | `Node of hash * hash list ]
+        | `Node of hash ]
       [@@deriving irmin]
 
       type t =
@@ -1720,7 +1718,6 @@ struct
               let t =
                 of_seq Total
                   (List.map strengthen_step_value vs |> List.to_seq)
-                  []
               in
               let hash =
                 (* Compute the hash right away (not lazily) so that
@@ -1766,7 +1763,7 @@ struct
       type kinded_hash =
         | Contents of hash * metadata
         | Contents_inlined of string * metadata
-        | Node of hash * hash list
+        | Node of hash
       [@@deriving irmin]
 
       type entry = { step : string; hash : kinded_hash } [@@deriving irmin]
@@ -1796,10 +1793,9 @@ struct
             let key = index hash in
             `Contents (key, m)
         | Contents_inlined (bytes, m) -> `Contents_inlined (bytes, m)
-        | Node (hash, inlined_hashes) ->
+        | Node hash ->
             let key = index hash in
-            let inlined_keys = List.map index inlined_hashes in
-            `Node (key, inlined_keys) )
+            `Node key )
 
     let of_inode_tree ~index layout tr =
       let entries = Array.make Conf.entries None in
@@ -1904,7 +1900,7 @@ struct
             let s = step s in
             let v = address_of_key c in
             Compress.Contents (s, v, m)
-        | s, `Node (n, _il) ->
+        | s, `Node n ->
             let s = step s in
             let v = address_of_key n in
             Compress.Node (s, v)
@@ -1962,8 +1958,7 @@ struct
         | Node (n, h) ->
             let name = step n in
             let hash = key h in
-            (* TODO inline *)
-            (name, `Node (hash, []))
+            (name, `Node hash)
       in
       let t : Compress.tagged_v -> T.key Bin.v =
        fun tv ->
@@ -2025,10 +2020,9 @@ struct
       | `Contents (contents_key, m) ->
           let h = Key.to_hash contents_key in
           { Snapshot.step; hash = Contents (h, m) }
-      | `Node (node_key, inlined_keys) ->
+      | `Node node_key ->
           let h = Key.to_hash node_key in
-          let inlined_h = List.map Key.to_hash inlined_keys in
-          { step; hash = Node (h, inlined_h) }
+          { step; hash = Node h }
       | `Contents_inlined (bytes, m) ->
           { Snapshot.step; hash = Contents_inlined (bytes, m) }
 
@@ -2101,11 +2095,11 @@ struct
 
     let pred t = apply t { f = (fun layout v -> I.pred layout v) }
 
-    let of_seq l to_inline =
+    let of_seq l =
       Stats.incr_inode_of_seq ();
-      Total (I.of_seq Total l to_inline)
+      Total (I.of_seq Total l)
 
-    let of_list l to_inline = of_seq (List.to_seq l) to_inline
+    let of_list l = of_seq (List.to_seq l)
 
     let seq ?offset ?length ?cache t =
       apply t { f = (fun layout v -> I.seq layout ?offset ?length ?cache v) }
@@ -2113,7 +2107,7 @@ struct
     let list ?offset ?length ?cache t =
       apply t { f = (fun layout v -> I.list layout ?offset ?length ?cache v) }
 
-    let empty () = of_list [] []
+    let empty () = of_list []
     let is_empty t = apply t { f = (fun _ v -> I.is_empty v) }
 
     let find ?cache t s =
@@ -2150,7 +2144,7 @@ struct
             (* If [x] is shallow, this [seq] call will perform IOs. *)
             seq x
           in
-          pre_hash_node (Node.of_seq vs [])
+          pre_hash_node (Node.of_seq vs)
       in
       let module Ptr_any = struct
         let t =
@@ -2224,8 +2218,8 @@ struct
 
     let merge ~contents ~node : t Irmin.Merge.t =
       let merge = Node.merge ~contents ~node in
-      let to_node t = of_seq (Node.seq t) [] in
-      let of_node n = Node.of_seq (seq n) [] in
+      let to_node t = of_seq (Node.seq t) in
+      let of_node n = Node.of_seq (seq n) in
       Irmin.Merge.like t merge of_node to_node
 
     let with_handler f_env t =
@@ -2290,7 +2284,7 @@ struct
       type value =
         [ `Contents of hash * metadata
         | `Contents_inlined of string * metadata
-        | `Node of hash * hash list ]
+        | `Node of hash ]
       [@@deriving irmin]
 
       let of_node t = t
@@ -2324,11 +2318,9 @@ struct
             (Option.map Key.unfindable_of_hash)
         in
         let promote_merge_node =
-          Irmin.Merge.like [%typ: (key * key list) option] node
-            (Option.map (fun (k, il) ->
-                 (Key.to_hash k, List.map Key.to_hash il)))
-            (Option.map (fun (h, il) ->
-                 (Key.unfindable_of_hash h, List.map Key.unfindable_of_hash il)))
+          Irmin.Merge.like [%typ: key option] node
+            (Option.map Key.to_hash)
+            (Option.map Key.unfindable_of_hash)
         in
         merge ~contents:promote_merge_contents ~node:promote_merge_node
 
