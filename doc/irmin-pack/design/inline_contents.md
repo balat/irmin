@@ -28,9 +28,14 @@ For very small values (e.g., a single byte), this overhead can be larger than th
 
 ### Inlining Threshold
 
-Content values are inlined when their **serialized size** plus 2 bytes of encoding overhead (1-byte variant tag + 1-byte varint length prefix) is less than the configured threshold. The default threshold is **48 bytes**.
+Content values are inlined when their **serialized size** plus 2 bytes of encoding overhead (1-byte variant tag + 1-byte varint length prefix) is less than the configured threshold. The default threshold is **48 bytes**, but this can be customized per repository.
 
-The threshold is configured per-repo via `Backend.Repo.inline_contents_max_bytes`. A value of `0` disables inlining entirely.
+The threshold is configured per-repo via `Backend.Repo.inline_contents_max_bytes`. A value of `0` disables inlining entirely. The configuration also includes validation to ensure the threshold is non-negative.
+
+Example configuration:
+```ocaml
+Irmin_pack.config ~inline_contents:true ~inline_contents_max_bytes:64 root
+```
 
 ### Inlining Decision
 
@@ -138,9 +143,9 @@ The inline contents feature is tested in `test/irmin-pack/test_inline_contents.m
 2. **Correctness with inlining**: Data stored and retrieved correctly with inlining enabled
 3. **Content equivalence**: Same data produces same content values regardless of inlining
 4. **Structure verification**: Verifies that small contents are actually stored inline in the node structure
+5. **Configuration validation**: Ensures that invalid configuration values (negative thresholds) are properly rejected
 
 ## Future Work
 
-- Configurable inlining threshold via config (currently hardcoded to 48 when enabled)
 - Automatic migration of existing small contents
 - Statistics/metrics for inline vs non-inline contents ratio
