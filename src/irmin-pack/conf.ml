@@ -193,6 +193,12 @@ let init ~sw ~fs ?(fresh = Default.fresh) ?(readonly = Default.readonly)
   let config = add config Key.use_fsync use_fsync in
   let config = add config Key.no_migrate no_migrate in
   let config = add config Key.inline_contents inline_contents in
+  if inline_contents_max_bytes < 0 then
+    invalid_arg
+      (Printf.sprintf
+         "Irmin_pack.Conf: inline_contents_max_bytes must be non-negative (got \
+          %d)"
+         inline_contents_max_bytes);
   let config =
     add config Key.inline_contents_max_bytes inline_contents_max_bytes
   in
