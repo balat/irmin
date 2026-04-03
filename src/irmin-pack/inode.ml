@@ -2410,7 +2410,6 @@ struct
     | Invalid_depth { expected; got; v } ->
         let msg = Fmt.to_to_string pp_invalid_depth (expected, got, v) in
         Error msg
-    | e -> raise e
 
   let integrity_check_inodes t k =
     protect_from_invalid_depth_exn @@ fun () ->

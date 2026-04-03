@@ -133,7 +133,6 @@ module IO = struct
               in
               Eio.Time.sleep io.clock (sleep *. backoff);
               aux (i + 1)
-          | e -> raise e
       in
       aux 1
 

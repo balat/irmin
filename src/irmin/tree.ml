@@ -2902,7 +2902,6 @@ module Make (P : Backend.S) = struct
           "verify_proof: %s is trying to read through a blinded node or object \
            (%a)"
           h.context pp_hash h.hash
-    | e -> raise e
 
   type verifier_error = [ `Proof_mismatch of string ] [@@deriving irmin]
 
@@ -2910,9 +2909,7 @@ module Make (P : Backend.S) = struct
     try
       let r = verify_proof_exn p f in
       Ok r
-    with
-    | Irmin_proof.Bad_proof e -> Error (`Proof_mismatch e.context)
-    | e -> raise e
+    with Irmin_proof.Bad_proof e -> Error (`Proof_mismatch e.context)
 
   let hash_of_proof_state state =
     let env = Env.empty () in
