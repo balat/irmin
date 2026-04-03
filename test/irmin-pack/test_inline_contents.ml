@@ -35,10 +35,11 @@ module S = struct
   include Maker.Make (Schema)
 end
 
-let config ~sw ~fs ?(readonly = false) ?(fresh = true) ~inline_contents root =
+let config ~sw ~fs ?(readonly = false) ?(fresh = true)
+    ?inline_contents_max_bytes ~inline_contents root =
   Irmin_pack.config ~sw ~fs ~readonly ~fresh
     ~indexing_strategy:Irmin_pack.Indexing_strategy.minimal ~inline_contents
-    root
+    ?inline_contents_max_bytes root
 
 let info = S.Info.empty
 
@@ -315,6 +316,26 @@ module Test_metadata = struct
     S_meta.Repo.close repo
 end
 
+(** Test that zero inline_contents_max_bytes disables inlining *)
+let test_zero_inline_threshold ~fs () =
+  let root = Eio.Path.(fs / "_build" / "test-inline-zero") in
+  rm_dir root;
+  Eio.Switch.run @@ fun sw ->
+  let repo =
+    S.Repo.v
+      (config ~sw ~fs ~readonly:false ~fresh:true ~inline_contents:true
+         ~inline_contents_max_bytes:0 root)
+  in
+  let tree = S.Tree.empty () in
+  let tree = S.Tree.add tree [ "small" ] "abc" in
+  let commit = S.Commit.v repo ~parents:[] ~info tree in
+  let hash = S.Commit.hash commit in
+  let commit' = S.Commit.of_hash repo hash |> Option.get in
+  let tree' = S.Commit.tree commit' in
+  let small = S.Tree.find tree' [ "small" ] in
+  Alcotest.(check (option string)) "small content" (Some "abc") small;
+  S.Repo.close repo
+
 let tests ~fs =
   let tc name f = Alcotest.test_case name `Quick f in
   [
@@ -324,4 +345,6 @@ let tests ~fs =
     tc "inlining structure" (test_inlining_structure ~fs);
     tc "inlining with non-default metadata"
       (Test_metadata.test_inlining_with_metadata ~fs);
+    tc "zero inline threshold disables inlining"
+      (test_zero_inline_threshold ~fs);
   ]
