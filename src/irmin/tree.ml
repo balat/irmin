@@ -490,7 +490,6 @@ module Make (P : Backend.S) = struct
 
     (* [elt] is a tree *)
     type elt = [ `Node of t | `Contents of Contents.t * Metadata.t ]
-
     and update = Add of elt | Remove
     and updatemap = update StepMap.t
     and map = elt StepMap.t
@@ -992,19 +991,18 @@ module Make (P : Backend.S) = struct
       let must_build_portable_node =
         bindings
         |> Seq.exists (fun (_, v) ->
-               match v with
-               | `Node n -> Option.is_none (cached_key n)
-               | `Contents (c, _) -> Option.is_none (Contents.cached_key c))
+            match v with
+            | `Node n -> Option.is_none (cached_key n)
+            | `Contents (c, _) -> Option.is_none (Contents.cached_key c))
       in
       if must_build_portable_node then
         let pnode =
           let seq =
             bindings
             |> Seq.map (fun (step, v) ->
-                   match v with
-                   | `Contents (c, m) -> (step, `Contents (Contents.hash c, m))
-                   | `Node n ->
-                       hash ~cache n (fun k -> (step, `Node k)))
+                match v with
+                | `Contents (c, m) -> (step, `Contents (Contents.hash c, m))
+                | `Node n -> hash ~cache n (fun k -> (step, `Node k)))
           in
           Portable.of_seq seq
         in
@@ -1014,19 +1012,19 @@ module Make (P : Backend.S) = struct
           let seq =
             bindings
             |> Seq.map (fun (step, v) ->
-                   match v with
-                   | `Contents (c, m) -> (
-                       match Contents.cached_key c with
-                       | Some k -> (step, `Contents (k, m))
-                       | None ->
-                           (* We checked that all child keys are cached above *)
-                           assert false)
-                   | `Node n -> (
-                       match cached_key n with
-                       | Some k -> (step, `Node k)
-                       | None ->
-                           (* We checked that all child keys are cached above *)
-                           assert false))
+                match v with
+                | `Contents (c, m) -> (
+                    match Contents.cached_key c with
+                    | Some k -> (step, `Contents (k, m))
+                    | None ->
+                        (* We checked that all child keys are cached above *)
+                        assert false)
+                | `Node n -> (
+                    match cached_key n with
+                    | Some k -> (step, `Node k)
+                    | None ->
+                        (* We checked that all child keys are cached above *)
+                        assert false))
           in
           P.Node.Val.of_seq seq
         in
@@ -1874,9 +1872,7 @@ module Make (P : Backend.S) = struct
           | None | Some (`Contents _) -> None
           | Some (`Node n) -> (aux [@tailcall]) n p)
     in
-    match t with
-    | `Node n -> (aux [@tailcall]) n path
-    | `Contents _ -> None
+    match t with `Node n -> (aux [@tailcall]) n path | `Contents _ -> None
 
   let find_tree (t : t) path =
     let cache = true in
@@ -2083,13 +2079,10 @@ module Make (P : Backend.S) = struct
                            binding [h], so we remove the binding. *)
                         Node.remove parent_node step |> changed
                     | false ->
-                        Node.add parent_node step (`Node child) |> changed
-                    ))
+                        Node.add parent_node step (`Node child) |> changed))
         in
         let top_node =
-          match root_tree with
-          | `Node n -> n
-          | `Contents _ -> Node.empty ()
+          match root_tree with `Node n -> n | `Contents _ -> Node.empty ()
         in
         aux path top_node @@ function
         | Unchanged -> root_tree
@@ -2162,8 +2155,7 @@ module Make (P : Backend.S) = struct
         Some (`Contents (Contents.of_value ~env value, m))
 
   let import_with_env ~env repo = function
-    | `Node k ->
-        `Node (Node.of_key ~env repo k)
+    | `Node k -> `Node (Node.of_key ~env repo k)
     | `Contents (k, m) -> `Contents (Contents.of_key ~env repo k, m)
     | `Contents_inlined (bytes, m) ->
         (* Deserialize inlined bytes to content value *)
@@ -2249,29 +2241,29 @@ module Make (P : Backend.S) = struct
         Atomic.incr cnt.node_val_v;
         StepMap.to_seq x
         |> Seq.filter_map (fun (step, v) ->
-               match v with
-               | `Node n -> (
-                   match Node.cached_key n with
-                   | Some k -> Some (step, `Node k)
-                   | None ->
-                       assertion_failure
-                         "Encountered child node value with uncached key \
-                          during export:@,\
-                          @ @[%a@]"
-                         dump v)
-               | `Contents (c, m) -> (
-                   (* Check if contents should be inlined at export time *)
-                   match should_inline_contents c with
-                   | Some bytes -> Some (step, `Contents_inlined (bytes, m))
-                   | None -> (
-                       match Contents.cached_key c with
-                       | Some k -> Some (step, `Contents (k, m))
-                       | None ->
-                           assertion_failure
-                             "Encountered child contents value with uncached \
-                              key during export:@,\
-                              @ @[%a@]"
-                             dump v)))
+            match v with
+            | `Node n -> (
+                match Node.cached_key n with
+                | Some k -> Some (step, `Node k)
+                | None ->
+                    assertion_failure
+                      "Encountered child node value with uncached key during \
+                       export:@,\
+                       @ @[%a@]"
+                      dump v)
+            | `Contents (c, m) -> (
+                (* Check if contents should be inlined at export time *)
+                match should_inline_contents c with
+                | Some bytes -> Some (step, `Contents_inlined (bytes, m))
+                | None -> (
+                    match Contents.cached_key c with
+                    | Some k -> Some (step, `Contents (k, m))
+                    | None ->
+                        assertion_failure
+                          "Encountered child contents value with uncached key \
+                           during export:@,\
+                           @ @[%a@]"
+                          dump v)))
       in
       let node = P.Node.Val.of_seq node_seq in
       add_node n node k
@@ -2418,13 +2410,11 @@ module Make (P : Backend.S) = struct
                     in
                     Seq.map (fun (_, x) -> x) seq
                   in
-                  on_node_seq new_children_seq
-                  @@ fun `Node_children_exported ->
+                  on_node_seq new_children_seq @@ fun `Node_children_exported ->
                   match (Atomic.get n.Node.v, Node.cached_value n) with
                   | Map x, _ -> add_node_map n x k
                   | Value (_, v, None), None | _, Some v -> add_node n v k
-                  | Value (_, v, Some um), _ ->
-                      add_updated_node n v um k
+                  | Value (_, v, Some um), _ -> add_updated_node n v um k
                   | (Key _ | Portable_dirty _ | Pruned _), _ ->
                       (* [n.v = (Key _ | Portable_dirty _ | Pruned _)] is
                          excluded above. *)
@@ -2557,8 +2547,7 @@ module Make (P : Backend.S) = struct
                 let ys = List.fold_left added !acc ys in
                 acc := ys
             (* Both *)
-            | `Both (`Node x, `Node y) ->
-                todo := (path, x, y) :: !todo
+            | `Both (`Node x, `Node y) -> todo := (path, x, y) :: !todo
             | `Both (`Contents x, `Node y) ->
                 let ys = entries path y in
                 let x = removed !acc (path, x) in
@@ -2687,9 +2676,7 @@ module Make (P : Backend.S) = struct
     [%log.debug "Tree.key"];
     match t with
     | `Node n -> (
-        match Node.key n with
-        | Some key -> Some (`Node key)
-        | None -> None)
+        match Node.key n with Some key -> Some (`Node key) | None -> None)
     | `Contents (c, m) -> (
         match Contents.key c with
         | Some key -> Some (`Contents (key, m))

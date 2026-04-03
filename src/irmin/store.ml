@@ -75,9 +75,7 @@ module Make (B : Backend.S) = struct
           | `Node h -> (
               match B.Node.index (B.Repo.node_t r) h with
               | None -> None
-              | Some k ->
-
-                  Some (`Node k))
+              | Some k -> Some (`Node k))
           | `Contents (h, m) -> (
               match B.Contents.index (B.Repo.contents_t r) h with
               | None -> None
@@ -92,9 +90,7 @@ module Make (B : Backend.S) = struct
       | `Node h -> (
           match B.Node.index (B.Repo.node_t r) h with
           | None -> None
-          | Some k ->
-
-              of_key r (`Node k))
+          | Some k -> of_key r (`Node k))
       | `Contents (h, m) -> (
           match B.Contents.index (B.Repo.contents_t r) h with
           | None -> None
@@ -588,7 +584,6 @@ module Make (B : Backend.S) = struct
             if Atomic.compare_and_set t.tree old None then
               (* the tree cache needs to be invalidated *)
               let tree =
-  
                 Tree.import_no_check (repo t) (`Node (Commit.node h))
               in
               if Atomic.compare_and_set t.tree None (Some (h, tree)) then

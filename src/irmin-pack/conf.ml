@@ -113,8 +113,8 @@ module Key = struct
   let inline_contents_max_bytes =
     key ~spec
       ~doc:
-        "Maximum serialized size in bytes for contents to be inlined. \
-         Includes 2 bytes of encoding overhead."
+        "Maximum serialized size in bytes for contents to be inlined. Includes \
+         2 bytes of encoding overhead."
       "inline-contents-max-bytes" Irmin.Type.int
       Default.inline_contents_max_bytes
 end
@@ -139,9 +139,7 @@ let indexing_strategy config = get config Key.indexing_strategy
 let use_fsync config = get config Key.use_fsync
 let no_migrate config = get config Key.no_migrate
 let inline_contents config = get config Key.inline_contents
-
-let inline_contents_max_bytes config =
-  get config Key.inline_contents_max_bytes
+let inline_contents_max_bytes config = get config Key.inline_contents_max_bytes
 let switch config = find_key config "sw" sw_typ
 let fs config = find_key config "fs" fs_typ
 

@@ -317,10 +317,7 @@ module type Graph = sig
       behhaves then same as [n] for other operations. *)
 
   val closure :
-    [> read ] t ->
-    min:node_key list ->
-    max:node_key list ->
-    node_key list
+    [> read ] t -> min:node_key list -> max:node_key list -> node_key list
   (** [closure t min max] is the unordered list of nodes [n] reachable from a
       node of [max] along a path which: (i) either contains no [min] or (ii) it
       ends with a [min].

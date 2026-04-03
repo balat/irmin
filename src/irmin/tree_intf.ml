@@ -248,8 +248,7 @@ module type S = sig
 
   (** {1 Folds} *)
 
-  val destruct :
-    t -> [ `Node of node | `Contents of Contents.t * metadata ]
+  val destruct : t -> [ `Node of node | `Contents of Contents.t * metadata ]
   (** General-purpose destructor for trees. *)
 
   type marks

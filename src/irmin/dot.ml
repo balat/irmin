@@ -162,9 +162,7 @@ module Make (S : Store.Generic_key.S) = struct
       !contents;
     List.iter
       (fun (k, t) ->
-        add_vertex
-          (`Node k)
-          [ `Shape `Box; `Style `Dotted; label_of_node k t ])
+        add_vertex (`Node k) [ `Shape `Box; `Style `Dotted; label_of_node k t ])
       !nodes;
     List.iter
       (fun (k, r) ->
@@ -178,16 +176,12 @@ module Make (S : Store.Generic_key.S) = struct
             match v with
             | `Contents (v, _meta) ->
                 let v = Contents.Key.to_hash v in
-                add_edge
-                  (`Node k)
+                add_edge (`Node k)
                   [ `Style `Dotted; label_of_step l ]
                   (`Contents v)
             | `Node n ->
                 let n = Node.Key.to_hash n in
-                add_edge
-                  (`Node k)
-                  [ `Style `Solid; label_of_step l ]
-                  (`Node n)
+                add_edge (`Node k) [ `Style `Solid; label_of_step l ] (`Node n)
             | `Contents_inlined _ ->
                 (* Inlined contents are embedded in the node, no edge to draw *)
                 ())

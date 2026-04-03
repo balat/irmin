@@ -199,8 +199,7 @@ module type Sigs = sig
           | `Contents_inlined of XKey.t
           | `Node of XKey.t ]
           list) ->
-        pred_commit:
-          (X.Repo.t -> XKey.t -> [> `Node of XKey.t ] list) ->
+        pred_commit:(X.Repo.t -> XKey.t -> [> `Node of XKey.t ] list) ->
         X.Repo.t ->
         unit) ->
       check:

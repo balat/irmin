@@ -1716,8 +1716,7 @@ struct
                  in a [Values], it needs to be converted back to a [Tree]
                  shallowed. *)
               let t =
-                of_seq Total
-                  (List.map strengthen_step_value vs |> List.to_seq)
+                of_seq Total (List.map strengthen_step_value vs |> List.to_seq)
               in
               let hash =
                 (* Compute the hash right away (not lazily) so that
@@ -2318,8 +2317,7 @@ struct
             (Option.map Key.unfindable_of_hash)
         in
         let promote_merge_node =
-          Irmin.Merge.like [%typ: key option] node
-            (Option.map Key.to_hash)
+          Irmin.Merge.like [%typ: key option] node (Option.map Key.to_hash)
             (Option.map Key.unfindable_of_hash)
         in
         merge ~contents:promote_merge_contents ~node:promote_merge_node

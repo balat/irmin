@@ -62,15 +62,12 @@ let generate ~sw ~fs =
 
       (* Create n01 node with step-b01 -> b01 *)
       let n01 =
-        Store.Backend.Node.Val.of_list
-          [ ("step-b01", `Contents (k_b01, ())) ]
+        Store.Backend.Node.Val.of_list [ ("step-b01", `Contents (k_b01, ())) ]
       in
       let k_n01 = Store.Backend.Node.add nstore n01 in
 
       (* Create n0 (root) node with step-n01 -> n01 *)
-      let n0 =
-        Store.Backend.Node.Val.of_list [ ("step-n01", `Node k_n01) ]
-      in
+      let n0 = Store.Backend.Node.Val.of_list [ ("step-n01", `Node k_n01) ] in
       let k_n0 = Store.Backend.Node.add nstore n0 in
 
       (* Create commit *)

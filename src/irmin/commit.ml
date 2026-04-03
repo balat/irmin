@@ -287,8 +287,7 @@ module History (S : Store) = struct
 
   let edges t =
     [%log.debug "edges"];
-    [ `Node (S.Val.node t) ]
-    @ List.map (fun k -> `Commit k) (S.Val.parents t)
+    [ `Node (S.Val.node t) ] @ List.map (fun k -> `Commit k) (S.Val.parents t)
 
   let closure t ~min ~max =
     [%log.debug "closure"];

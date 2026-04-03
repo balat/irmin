@@ -170,12 +170,8 @@ module Make (S : Generic_key) = struct
       let w = B.Node.find n k in
       check_values (get w);
       let kv1 = kv1 ~repo in
-      let k1 =
-        with_node repo (fun g () -> Graph.v g [ ("x", normal kv1) ])
-      in
-      let k1' =
-        with_node repo (fun g () -> Graph.v g [ ("x", normal kv1) ])
-      in
+      let k1 = with_node repo (fun g () -> Graph.v g [ ("x", normal kv1) ]) in
+      let k1' = with_node repo (fun g () -> Graph.v g [ ("x", normal kv1) ]) in
       check_key "k1.1" k1 k1';
       let t1 = B.Node.find n k1 in
       let k' = B.Node.Val.find (get t1) "x" in
@@ -186,24 +182,16 @@ module Make (S : Generic_key) = struct
         k';
       let k1'' = with_node repo (fun n () -> B.Node.add n (get t1)) in
       check_key "k1.2" k1 k1'';
-      let k2 =
-        with_node repo (fun g () -> Graph.v g [ ("b", `Node k1) ])
-      in
-      let k2' =
-        with_node repo (fun g () -> Graph.v g [ ("b", `Node k1) ])
-      in
+      let k2 = with_node repo (fun g () -> Graph.v g [ ("b", `Node k1) ]) in
+      let k2' = with_node repo (fun g () -> Graph.v g [ ("b", `Node k1) ]) in
       check_key "k2.1" k2 k2';
       let t2 = B.Node.find n k2 in
       let k2'' = with_node repo (fun n () -> B.Node.add n (get t2)) in
       check_key "k2.2" k2 k2'';
       let k1''' = Graph.find g k2 [ "b" ] in
       check_val "k1.3" (Some (`Node k1)) k1''';
-      let k3 =
-        with_node repo (fun g () -> Graph.v g [ ("a", `Node k2) ])
-      in
-      let k3' =
-        with_node repo (fun g () -> Graph.v g [ ("a", `Node k2) ])
-      in
+      let k3 = with_node repo (fun g () -> Graph.v g [ ("a", `Node k2) ]) in
+      let k3' = with_node repo (fun g () -> Graph.v g [ ("a", `Node k2) ]) in
       check_key "k3.1" k3 k3';
       let t3 = B.Node.find n k3 in
       let k3'' = with_node repo (fun n () -> B.Node.add n (get t3)) in
@@ -221,16 +209,12 @@ module Make (S : Generic_key) = struct
       let kv13 = Graph.find g k3 [ "a"; "b"; "x" ] in
       check_val "v1" (Some (normal kv1)) kv13;
       let kv2 = kv2 ~repo in
-      let k4 =
-        with_node repo (fun g () -> Graph.v g [ ("x", normal kv2) ])
-      in
+      let k4 = with_node repo (fun g () -> Graph.v g [ ("x", normal kv2) ]) in
       let k5 =
         with_node repo (fun g () ->
             Graph.v g [ ("b", `Node k1); ("c", `Node k4) ])
       in
-      let k6 =
-        with_node repo (fun g () -> Graph.v g [ ("a", `Node k5) ])
-      in
+      let k6 = with_node repo (fun g () -> Graph.v g [ ("a", `Node k5) ]) in
       let k6' =
         with_node repo (fun g () ->
             Graph.add g k3 [ "a"; "c"; "x" ] (normal kv2))
@@ -250,25 +234,13 @@ module Make (S : Generic_key) = struct
           all
       in
       let n0 = with_node repo (fun g () -> Graph.v g []) in
-      let n1 =
-        with_node repo (fun g () -> Graph.add g n0 [ "b" ] (`Node n0))
-      in
-      let n2 =
-        with_node repo (fun g () -> Graph.add g n1 [ "a" ] (`Node n0))
-      in
-      let n3 =
-        with_node repo (fun g () -> Graph.add g n2 [ "a" ] (`Node n0))
-      in
+      let n1 = with_node repo (fun g () -> Graph.add g n0 [ "b" ] (`Node n0)) in
+      let n2 = with_node repo (fun g () -> Graph.add g n1 [ "a" ] (`Node n0)) in
+      let n3 = with_node repo (fun g () -> Graph.add g n2 [ "a" ] (`Node n0)) in
       assert_no_duplicates "1" n3;
-      let n1 =
-        with_node repo (fun g () -> Graph.add g n0 [ "a" ] (`Node n0))
-      in
-      let n2 =
-        with_node repo (fun g () -> Graph.add g n1 [ "b" ] (`Node n0))
-      in
-      let n3 =
-        with_node repo (fun g () -> Graph.add g n2 [ "a" ] (`Node n0))
-      in
+      let n1 = with_node repo (fun g () -> Graph.add g n0 [ "a" ] (`Node n0)) in
+      let n2 = with_node repo (fun g () -> Graph.add g n1 [ "b" ] (`Node n0)) in
+      let n3 = with_node repo (fun g () -> Graph.add g n2 [ "a" ] (`Node n0)) in
       assert_no_duplicates "2" n3;
       let n1 =
         with_node repo (fun g () -> Graph.add g n0 [ "b" ] (normal kv1))
@@ -315,15 +287,9 @@ module Make (S : Generic_key) = struct
       let check_key = check B.Commit.Key.t in
       let check_keys = checks B.Commit.Key.t in
       (* t3 -a-> t2 -b-> t1 -x-> (v1) *)
-      let kt1 =
-        with_node repo (fun g () -> Graph.v g [ ("x", normal kv1) ])
-      in
-      let kt2 =
-        with_node repo (fun g () -> Graph.v g [ ("a", `Node kt1) ])
-      in
-      let kt3 =
-        with_node repo (fun g () -> Graph.v g [ ("b", `Node kt2) ])
-      in
+      let kt1 = with_node repo (fun g () -> Graph.v g [ ("x", normal kv1) ]) in
+      let kt2 = with_node repo (fun g () -> Graph.v g [ ("a", `Node kt1) ]) in
+      let kt3 = with_node repo (fun g () -> Graph.v g [ ("b", `Node kt2) ]) in
       (* r1 : t2 *)
       let with_info n fn = with_commit repo (fun h -> fn h ~info:(info n)) in
       let kr1, _ = with_info 3 (History.v ~node:kt2 ~parents:[]) in
@@ -597,32 +563,24 @@ module Make (S : Generic_key) = struct
       (* The empty node *)
       let k0 = with_node repo (fun g () -> Graph.v g []) in
       (* Create the node t1 -x-> (v1) *)
-      let k1 =
-        with_node repo (fun g () -> Graph.v g [ ("x", normal kv1) ])
-      in
+      let k1 = with_node repo (fun g () -> Graph.v g [ ("x", normal kv1) ]) in
       (* Create the node t2 -b-> t1 -x-> (v1) *)
-      let k2 =
-        with_node repo (fun g () -> Graph.v g [ ("b", `Node k1) ])
-      in
+      let k2 = with_node repo (fun g () -> Graph.v g [ ("b", `Node k1) ]) in
       (* Create the node t3 -c-> t1 -x-> (v1) *)
-      let k3 =
-        with_node repo (fun g () -> Graph.v g [ ("c", `Node k1) ])
-      in
+      let k3 = with_node repo (fun g () -> Graph.v g [ ("c", `Node k1) ]) in
       (* Should create the node:
                           t4 -b-> t1 -x-> (v1)
                              \c/ *)
       let k4 =
         with_node repo (fun g () ->
             Irmin.Merge.(f @@ B.Node.merge g)
-              ~old:(old (Some k0))
-              (Some k2)
-              (Some k3))
+              ~old:(old (Some k0)) (Some k2) (Some k3))
       in
       let k4 = merge_exn "k4" k4 in
       let k4 = match k4 with Some k -> k | None -> failwith "k4" in
       let _ = k4 in
       let succ_t = [%typ: string * Graph.value] in
-      let succ = Graph.list g (k4) in
+      let succ = Graph.list g k4 in
       checks succ_t "k4" [ ("b", `Node k1); ("c", `Node k1) ] succ;
       let info date =
         let i = Int64.of_int date in
@@ -659,9 +617,7 @@ module Make (S : Generic_key) = struct
       in
       let kr3_key = merge_exn "kr3_key" kr3_key in
       check_key "kr3 key with old parent" kr3 kr3_key;
-      let kr3', _ =
-        with_info 3 @@ History.v ~node:(k4) ~parents:[ kr1; kr2 ]
-      in
+      let kr3', _ = with_info 3 @@ History.v ~node:k4 ~parents:[ kr1; kr2 ] in
       let r3 = B.Commit.find c kr3 in
       let r3' = B.Commit.find c kr3' in
       check T.(option B.Commit.Val.t) "r3" r3 r3';
@@ -1658,7 +1614,7 @@ module Make (S : Generic_key) = struct
           match S.Tree.destruct t with
           | `Contents _ -> assert false
           | `Node n ->
-              let _ = S.to_backend_portable_node (n) in
+              let _ = S.to_backend_portable_node n in
               ()
         in
         let () = trigger_node_to_backend_portable portable_dirty in
@@ -1823,7 +1779,7 @@ module Make (S : Generic_key) = struct
       (match S.Tree.destruct c1 with
       | `Contents _ -> Alcotest.fail "got `Contents, expected `Node"
       | `Node node -> (
-          let v = S.to_backend_node (node) in
+          let v = S.to_backend_node node in
           let () =
             let ls = B.Node.Val.list v in
             Alcotest.(check int) "list wide node" size (List.length ls)
@@ -2355,7 +2311,7 @@ module Make (S : Generic_key) = struct
       let h = S.Head.get t in
       let commit_v =
         let commit_foo = commit "foo" in
-        S.Backend.Commit.Val.v ~info:(info ()) ~node:(key_3)
+        S.Backend.Commit.Val.v ~info:(info ()) ~node:key_3
           ~parents:[ S.Commit.key h; commit_foo ]
       in
       let commit_key = with_commit repo (fun c -> B.Commit.add c commit_v) in

@@ -558,8 +558,7 @@ let test_truncated_inodes ~fs ~indexing_strategy =
   in
   (* v1 is a Truncated inode of tag Values. No pointers. *)
   let v1 =
-    Inode.Val.of_list [ (s00, normal foo); (s10, normal foo) ]
-    |> to_truncated
+    Inode.Val.of_list [ (s00, normal foo); (s10, normal foo) ] |> to_truncated
   in
   Inode.Val.list v1 |> ignore;
   (iter_steps @@ fun step -> Inode.Val.find v1 step);

@@ -135,9 +135,9 @@ val inline_contents : Irmin.Backend.Conf.t -> bool
     Default [false].
 
     When enabled, content values smaller than [inline_contents_max_bytes]
-    (serialized, including 2 bytes encoding overhead) are stored directly
-    within the parent node entry rather than as separate pack entries. This
-    reduces storage overhead and improves read performance for small values.
+    (serialized, including 2 bytes encoding overhead) are stored directly within
+    the parent node entry rather than as separate pack entries. This reduces
+    storage overhead and improves read performance for small values.
 
     Note: Enabling this option changes the hash computation of nodes, making
     stores incompatible with stores created with inlining disabled for
@@ -148,9 +148,9 @@ val inline_contents : Irmin.Backend.Conf.t -> bool
     for more details. *)
 
 val inline_contents_max_bytes : Irmin.Backend.Conf.t -> int
-(** Maximum serialized size in bytes for contents to be inlined. Includes
-    2 bytes of encoding overhead (variant tag + length prefix). Default [48].
-    Only used when [inline_contents] is [true]. *)
+(** Maximum serialized size in bytes for contents to be inlined. Includes 2
+    bytes of encoding overhead (variant tag + length prefix). Default [48]. Only
+    used when [inline_contents] is [true]. *)
 
 val switch : Irmin.Backend.Conf.t -> Eio.Switch.t
 (** Eio switch *)

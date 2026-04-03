@@ -121,8 +121,7 @@ module Make (I : Cstubs_inverted.INTERNAL) = struct
                 match of_bin bytes with
                 | Ok c -> Root.create_contents (module Store) c
                 | Error (`Msg e) ->
-                    failwith
-                      ("Failed to deserialize inlined contents: " ^ e))))
+                    failwith ("Failed to deserialize inlined contents: " ^ e))))
 
   let () =
     fn "contents_to_string"

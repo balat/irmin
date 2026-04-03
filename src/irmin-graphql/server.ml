@@ -300,8 +300,7 @@ struct
       ('ctx, (Store.contents * Store.metadata * Store.path) option) Schema.typ;
     contents_key_value :
       ('ctx, (Store.contents_key * Store.metadata) option) Schema.typ;
-    node_key_value :
-      ('ctx, Store.node_key option) Schema.typ;
+    node_key_value : ('ctx, Store.node_key option) Schema.typ;
   }
 
   let rec store_schema =
@@ -427,17 +426,15 @@ struct
                     ~resolve:(fun _ (tree, tree_path) ->
                       Store.Tree.list tree Store.Path.empty
                       |> List.map (fun (step, tree) ->
-                             let absolute_path =
-                               Store.Path.rcons tree_path step
-                             in
-                             match Store.Tree.destruct tree with
-                             | `Contents (c, m) ->
-                                 let c = Store.Tree.Contents.force_exn c in
-                                 let f = Lazy.force contents_as_node in
-                                 f (c, m, absolute_path)
-                             | `Node _ ->
-                                 let f = Lazy.force tree_as_node in
-                                 f (tree, absolute_path)));
+                          let absolute_path = Store.Path.rcons tree_path step in
+                          match Store.Tree.destruct tree with
+                          | `Contents (c, m) ->
+                              let c = Store.Tree.Contents.force_exn c in
+                              let f = Lazy.force contents_as_node in
+                              f (c, m, absolute_path)
+                          | `Node _ ->
+                              let f = Lazy.force tree_as_node in
+                              f (tree, absolute_path)));
                 ]))
         in
         let branch =

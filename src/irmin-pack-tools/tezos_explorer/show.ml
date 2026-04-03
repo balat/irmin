@@ -2,7 +2,6 @@ open Notty
 open Notty_unix
 open Import
 open Files
-
 module Files = Make (Irmin_tezos.Conf) (Irmin_tezos.Schema)
 
 type entry_content = {
