@@ -234,6 +234,87 @@ let test_inlining_structure ~fs () =
   Alcotest.(check int) "non-inlined count" 1 !non_inlined_count;
   S.Repo.close repo
 
+(** Test inlining with non-default metadata.
+
+    This exercises the [inlined-x-i] / [inlined-x-d] serialization variants in
+    inode.ml, which are distinct from the default-metadata variants [inlined-i]
+    / [inlined-d]. *)
+module Test_metadata = struct
+  module Metadata = struct
+    type t = [ `Normal | `Exec ]
+
+    let t = Irmin.Type.enum "metadata" [ ("normal", `Normal); ("exec", `Exec) ]
+    let default = `Normal
+    let merge = Irmin.Merge.default t
+  end
+
+  module Schema_with_metadata = struct
+    module Metadata = Metadata
+    module Contents = Irmin.Contents.String_v2
+    module Path = Irmin.Path.String_list
+    module Branch = Irmin.Branch.String
+    module Hash = Irmin.Hash.SHA1
+    module Node = Irmin.Node.Generic_key.Make_v2 (Hash) (Path) (Metadata)
+    module Commit = Irmin.Commit.Generic_key.Make_v2 (Hash)
+    module Info = Irmin.Info.Default
+  end
+
+  module S_meta = struct
+    module Maker = Irmin_pack_unix.Maker (Conf)
+    include Maker.Make (Schema_with_metadata)
+  end
+
+  let test_inlining_with_metadata ~fs () =
+    let root = Eio.Path.(fs / "_build" / "test-inline-metadata") in
+    rm_dir root;
+    Eio.Switch.run @@ fun sw ->
+    let repo =
+      S_meta.Repo.v
+        (config ~sw ~fs ~readonly:false ~fresh:true ~inline_contents:true root)
+    in
+    let tree = S_meta.Tree.empty () in
+    (* Small content with default metadata -> inlined-i/inlined-d *)
+    let tree = S_meta.Tree.add tree [ "default" ] "small" in
+    (* Small content with non-default metadata -> inlined-x-i/inlined-x-d *)
+    let tree = S_meta.Tree.add tree [ "exec" ] ~metadata:`Exec "tiny" in
+    (* Large content with non-default metadata -> not inlined *)
+    let tree =
+      S_meta.Tree.add tree [ "exec_large" ] ~metadata:`Exec
+        (String.make 100 'x')
+    in
+    let commit =
+      S_meta.Commit.v repo ~parents:[] ~info:S_meta.Info.empty tree
+    in
+    let hash = S_meta.Commit.hash commit in
+    (* Read back and verify values and metadata *)
+    let commit' = S_meta.Commit.of_hash repo hash |> Option.get in
+    let tree' = S_meta.Commit.tree commit' in
+    Alcotest.(check (option string))
+      "default meta content" (Some "small")
+      (S_meta.Tree.find tree' [ "default" ]);
+    Alcotest.(check (option string))
+      "exec meta content" (Some "tiny")
+      (S_meta.Tree.find tree' [ "exec" ]);
+    Alcotest.(check (option string))
+      "exec large content"
+      (Some (String.make 100 'x'))
+      (S_meta.Tree.find tree' [ "exec_large" ]);
+    (* Verify metadata was preserved *)
+    let check_meta path expected =
+      match S_meta.Tree.find_all tree' path with
+      | None -> Alcotest.failf "missing entry at %s" (String.concat "/" path)
+      | Some (_, m) ->
+          Alcotest.(check string)
+            ("metadata at " ^ String.concat "/" path)
+            expected
+            (Irmin.Type.to_string Metadata.t m)
+    in
+    check_meta [ "default" ] "\"normal\"";
+    check_meta [ "exec" ] "\"exec\"";
+    check_meta [ "exec_large" ] "\"exec\"";
+    S_meta.Repo.close repo
+end
+
 let tests ~fs =
   let tc name f = Alcotest.test_case name `Quick f in
   [
@@ -241,4 +322,6 @@ let tests ~fs =
     tc "with inlining" (test_with_inlining ~fs);
     tc "content equivalence" (test_content_equivalence ~fs);
     tc "inlining structure" (test_inlining_structure ~fs);
+    tc "inlining with non-default metadata"
+      (Test_metadata.test_inlining_with_metadata ~fs);
   ]
