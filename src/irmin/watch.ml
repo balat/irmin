@@ -41,7 +41,9 @@ let global = id ()
 let workers_r = Atomic.make 0
 let workers () = Atomic.get workers_r
 
-(* Not sure this is right *)
+(* Continuously drain the stream, applying [f] to each non-None element.
+   None is used as a termination signal but is currently ignored
+   (the loop continues), which may cause fibers to leak on shutdown. *)
 let rec stream_iter f s =
   (match Eio.Stream.take s with Some v -> f v | None -> ());
   stream_iter f s
@@ -60,8 +62,12 @@ let scheduler () =
         in
         ignore (Atomic.fetch_and_add workers_r 1);
         let sw =
-          try Option.get (Atomic.get watch_switch)
-          with _ -> failwith "Big Yikes"
+          match Atomic.get watch_switch with
+          | Some sw -> sw
+          | None ->
+              failwith
+                "Watch: no Eio switch set. Call Irmin.Watch.set_watch_switch \
+                 before using watches."
         in
         (Eio.Fiber.fork ~sw @@ fun () -> stream_iter (fun f -> f ()) stream);
         (* Lwt.async (fun () ->
