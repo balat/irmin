@@ -255,7 +255,7 @@ struct
               request t (module Merge) (old, a, b) |> Error.unwrap "Node.merge"
           | Error e -> Error e
         in
-        Irmin.Merge.v Irmin.Type.(option (pair Key.t (list Contents.Key.t))) f
+        Irmin.Merge.v Irmin.Type.(option Key.t) f
     end
 
     module Node_portable = Store.Backend.Node_portable
@@ -391,6 +391,7 @@ struct
 
       let v config = Lwt_eio.run_lwt @@ fun () -> connect config
       let config (t : t) = t.Client.config
+      let inline_contents_max_bytes _ = 0
       let close (t : t) = Lwt_eio.run_lwt @@ fun () -> Client.close t
       let contents_t (t : t) = t
       let node_t (t : t) = t

@@ -211,7 +211,7 @@ struct
       let value_t = Node.Val.t
 
       type hash = Hash.t
-      type node_with_inlined = key * Contents.key list [@@deriving irmin]
+      type node_with_inlined = key [@@deriving irmin]
 
       module Mem = struct
         let name = "node.mem"

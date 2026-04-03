@@ -95,7 +95,7 @@ module type S = sig
       type key = Store.Backend.Node.key
       type value = Store.Backend.Node.value
       type hash = Store.Backend.Node.hash
-      type node_with_inlined = key * Store.Backend.Contents.key list
+      type node_with_inlined = key
 
       module Mem : CMD with type req = key and type res = bool
       module Find : CMD with type req = key and type res = value option
