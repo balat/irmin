@@ -37,8 +37,8 @@
     operations – by upcasting:
 
     {[
-      let read_only t = (t :> (_, read) Ref.t)
-      let write_only t = (t :> (_, write) Ref.t)
+    let read_only t = (t :> (_, read) Ref.t)
+    let write_only t = (t :> (_, write) Ref.t)
     ]}
 
     Note that the ['perms] phantom type parameter should be contravariant: it's

@@ -98,7 +98,8 @@ let agree_test_seq ~count ~fs ~sw =
   let module Env : ENV = struct
     let fs = fs
     let sw = sw
-  end in
+  end
+  in
   let module Model = Model (Env) in
   Model.make_store ~fs ~sw;
   let module TT = STM_sequential.Make (Model) in
@@ -108,7 +109,8 @@ let agree_test_eio ~count ~domain_mgr ~fs ~sw =
   let module Env : ENV = struct
     let fs = fs
     let sw = sw
-  end in
+  end
+  in
   let module Model = Model (Env) in
   Model.make_store ~fs ~sw;
   let module TT = STM_domain_eio.Make (Model) in

@@ -736,8 +736,7 @@ let graphql ~env =
              (S)
              (struct
                let remote = remote_fn
-             end)
-         in
+             end) in
          let t = store () in
          let server = Server.v (S.repo t) in
          let ctx =
