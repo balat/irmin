@@ -134,9 +134,7 @@ module Index = struct
     let initial_state = create_index () in
     Metrics.v ~origin:Index_stats ~name:"index_metric" ~initial_state t
 
-  let report index =
-    Metrics.update index (fun _ -> Stats_intf.Index.S.get ())
-
+  let report index = Metrics.update index (fun _ -> Stats_intf.Index.S.get ())
   let export m = Metrics.state m
 end
 
@@ -217,9 +215,7 @@ module Latest_gc = struct
     let initial_state = None in
     Metrics.v ~origin:Latest_gc ~name:"latest_gc_metric" ~initial_state t
 
-  let clear : stat -> unit =
-   fun m -> Metrics.update m (fun _ -> None)
-
+  let clear : stat -> unit = fun m -> Metrics.update m (fun _ -> None)
   let export : stat -> t = Metrics.state
 
   let update : stats -> stat -> unit =
