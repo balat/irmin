@@ -524,6 +524,7 @@ module type S = sig
         [Irmin.Type.t] descriptor [stats_t] gives field access via [Irmin.Type]
         introspection. *)
 
+    val kinded_key_t : kinded_key Irmin.Type.t
     val stats_t : stats Irmin.Type.t
 
     type concrete =

@@ -501,6 +501,7 @@ module type S = sig
 
     type stats
 
+    val kinded_key_t : kinded_key Irmin.Type.t
     val stats_t : stats Irmin.Type.t
 
     type concrete =
@@ -1161,6 +1162,7 @@ module Make (S : Irmin.Generic_key.S) = struct
        [stats_t] / [Irmin.Type] introspection. *)
     type stats = S.Tree.stats
 
+    let kinded_key_t = S.Tree.kinded_key_t
     let stats_t = S.Tree.stats_t
 
     type error = S.Tree.error
