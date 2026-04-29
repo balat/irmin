@@ -295,6 +295,7 @@ module type S = sig
         Irmin.Node.Generic_key.S
           with type t = value
            and type hash = Schema.Hash.t
+           and type contents_key = contents_key
            and type node_key = key
            and type metadata = metadata
            and type step = step
