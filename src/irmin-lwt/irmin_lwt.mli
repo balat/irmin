@@ -253,26 +253,6 @@ module type S = sig
   type kinded_key = [ `Contents of contents_key | `Node of node_key ]
   type watch
 
-  (** {1 Underlying direct-style store}
-
-      The Irmin 4 direct-style store this Lwt-flavoured shim wraps. Useful
-      whenever an Irmin 4 functor (e.g. [Irmin.Sync.Make], [Irmin.Dot]) needs to
-      be applied: pass [X.Underlying] in lieu of the Lwt-flavoured [X]. The
-      Lwt-side [Sync] and [Dot] in this library do exactly that internally. *)
-  module Underlying :
-    Irmin.Generic_key.S
-      with module Schema = Schema
-       and type repo = repo
-       and type t = t
-       and type node = node
-       and type tree = tree
-       and type commit = commit
-       and type slice = slice
-       and type contents_key = contents_key
-       and type node_key = node_key
-       and type commit_key = commit_key
-       and type Schema.Hash.t = hash
-
   (** {1 Type-level submodules} *)
 
   module Info : Irmin.Info.S with type t = info
@@ -288,7 +268,7 @@ module type S = sig
       perform no I/O). [Schema], [Hash], [Slice], [Node_portable],
       [Commit_portable] are pure, kept as-is from the upstream backend. *)
   module Backend : sig
-    module Schema : module type of Schema with module Hash = Schema.Hash
+    module Schema = Schema
     module Hash : Irmin.Hash.S with type t = Schema.Hash.t
 
     module Contents : sig
@@ -419,6 +399,37 @@ module type S = sig
       val v : Repo.t -> t
     end
   end
+
+  (** {1 Underlying direct-style store}
+
+      The Irmin 4 direct-style store this Lwt-flavoured shim wraps. Useful
+      whenever an Irmin 4 functor (e.g. [Irmin.Sync.Make], [Irmin.Dot]) needs to
+      be applied: pass [X.Underlying] in lieu of the Lwt-flavoured [X]. The
+      Lwt-side [Sync] and [Dot] in this library do exactly that internally.
+
+      The [Backend.X.t] type-equality constraints below state that the store
+      handles ([Contents.t], [Node.t], [Commit.t], [Branch.t]) of [Underlying]
+      and the Lwt-wrapped [Backend] are the same type. At runtime they are the
+      same value — the Lwt wrapper is purely type-level — but the type-equality
+      has to be made explicit for downstream functors (e.g.
+      [Irmin_lwt.Node.Graph]) that ferry handles between the two views. *)
+  module Underlying :
+    Irmin.Generic_key.S
+      with module Schema = Schema
+       and type repo = repo
+       and type t = t
+       and type node = node
+       and type tree = tree
+       and type commit = commit
+       and type slice = slice
+       and type contents_key = contents_key
+       and type node_key = node_key
+       and type commit_key = commit_key
+       and type Schema.Hash.t = hash
+       and type 'a Backend.Contents.t = 'a Backend.Contents.t
+       and type 'a Backend.Node.t = 'a Backend.Node.t
+       and type 'a Backend.Commit.t = 'a Backend.Commit.t
+       and type Backend.Branch.t = Backend.Branch.t
 
   module Contents : sig
     include Irmin.Contents.S with type t = contents
@@ -1244,16 +1255,19 @@ module Make (S : Irmin.Generic_key.S) :
      and module Hash = S.Hash
      and module Path = S.Path
      and module Metadata = S.Metadata
-     and module Underlying = S
-     and module Backend.Schema = S.Backend.Schema
+     and type 'a Backend.Contents.t = 'a S.Backend.Contents.t
      and type Backend.Contents.value = S.Backend.Contents.value
+     and type 'a Backend.Node.t = 'a S.Backend.Node.t
      and type Backend.Node.value = S.Backend.Node.value
      and type Backend.Node.Val.t = S.Backend.Node.Val.t
+     and type 'a Backend.Commit.t = 'a S.Backend.Commit.t
      and type Backend.Commit.value = S.Backend.Commit.value
      and type Backend.Commit.Val.t = S.Backend.Commit.Val.t
      and type Backend.Slice.t = S.Backend.Slice.t
+     and type Backend.Branch.t = S.Backend.Branch.t
      and type Backend.Branch.watch = S.Backend.Branch.watch
      and type Backend.Remote.endpoint = S.Backend.Remote.endpoint
+     and module Underlying = S
      and module History = S.History
      and type Repo.elt = S.Repo.elt
      and type Tree.kinded_hash = S.Tree.kinded_hash

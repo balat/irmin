@@ -213,23 +213,6 @@ module type S = sig
   type kinded_key = [ `Contents of contents_key | `Node of node_key ]
   type watch
 
-  (** {1 Underlying direct-style store}
-
-      The Irmin 4 direct-style store this Lwt-flavoured shim wraps. *)
-  module Underlying :
-    Irmin.Generic_key.S
-      with module Schema = Schema
-       and type repo = repo
-       and type t = t
-       and type node = node
-       and type tree = tree
-       and type commit = commit
-       and type slice = slice
-       and type contents_key = contents_key
-       and type node_key = node_key
-       and type commit_key = commit_key
-       and type Schema.Hash.t = hash
-
   (** {1 Type-level submodules} *)
 
   module Info : Irmin.Info.S with type t = info
@@ -238,7 +221,7 @@ module type S = sig
   module Metadata : Irmin.Metadata.S with type t = metadata
 
   module Backend : sig
-    module Schema : module type of Schema with module Hash = Schema.Hash
+    module Schema = Schema
     module Hash : Irmin.Hash.S with type t = Schema.Hash.t
 
     module Contents : sig
@@ -369,6 +352,27 @@ module type S = sig
       val v : Repo.t -> t
     end
   end
+
+  (** {1 Underlying direct-style store}
+
+      The Irmin 4 direct-style store this Lwt-flavoured shim wraps. *)
+  module Underlying :
+    Irmin.Generic_key.S
+      with module Schema = Schema
+       and type repo = repo
+       and type t = t
+       and type node = node
+       and type tree = tree
+       and type commit = commit
+       and type slice = slice
+       and type contents_key = contents_key
+       and type node_key = node_key
+       and type commit_key = commit_key
+       and type Schema.Hash.t = hash
+       and type 'a Backend.Contents.t = 'a Backend.Contents.t
+       and type 'a Backend.Node.t = 'a Backend.Node.t
+       and type 'a Backend.Commit.t = 'a Backend.Commit.t
+       and type Backend.Branch.t = Backend.Branch.t
 
   module Contents : sig
     include Irmin.Contents.S with type t = contents
@@ -1181,7 +1185,7 @@ module Make (S : Irmin.Generic_key.S) = struct
      ['_ Lwt.t] and are awaited with [Lwt_eio.Promise.await_lwt] before
      being handed to the underlying direct-style implementation. *)
   module Backend = struct
-    module Schema = S.Backend.Schema
+    module Schema = Schema
     module Hash = S.Backend.Hash
 
     module Contents = struct
@@ -1970,14 +1974,10 @@ module Node = struct
       let lift2 f =
         Option.map (fun g x y -> Lwt_eio.Promise.await_lwt (g x y)) f
       in
-      let node = lift1 node in
-      let contents = lift1 contents in
-      let edge = lift2 edge in
-      let skip_node = lift1 skip_node in
-      let skip_contents = lift1 skip_contents in
       run_eio (fun () ->
-          G.iter t ~min ~max ?node ?contents ?edge ?skip_node ?skip_contents
-            ?rev ())
+          G.iter t ~min ~max ?node:(lift1 node) ?contents:(lift1 contents)
+            ?edge:(lift2 edge) ?skip_node:(lift1 skip_node)
+            ?skip_contents:(lift1 skip_contents) ?rev ())
   end
 end
 
