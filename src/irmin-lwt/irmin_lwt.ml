@@ -84,6 +84,7 @@ module type Lwt_node_graph_S = sig
   type path
   type value = [ `Node of node_key | `Contents of contents_key * metadata ]
 
+  val value_t : value Irmin.Type.t
   val empty : [> Irmin.Perms.write ] t -> node_key Lwt.t
   val v : [> Irmin.Perms.write ] t -> (step * value) list -> node_key Lwt.t
   val list : [> Irmin.Perms.read ] t -> node_key -> (step * value) list Lwt.t
@@ -1961,6 +1962,7 @@ module Node = struct
     type path = X.path
     type value = [ `Node of node_key | `Contents of contents_key * metadata ]
 
+    let value_t = G.value_t
     let empty t = run_eio (fun () -> G.empty t)
     let v t kvs = run_eio (fun () -> G.v t kvs)
     let list t k = run_eio (fun () -> G.list t k)
