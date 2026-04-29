@@ -143,6 +143,26 @@ module type S = sig
   type kinded_key = [ `Contents of contents_key | `Node of node_key ]
   type watch
 
+  (** {1 Underlying direct-style store}
+
+      The Irmin 4 direct-style store this Lwt-flavoured shim wraps. Useful
+      whenever an Irmin 4 functor (e.g. [Irmin.Sync.Make], [Irmin.Dot]) needs to
+      be applied: pass [X.Underlying] in lieu of the Lwt-flavoured [X]. The
+      Lwt-side [Sync] and [Dot] in this library do exactly that internally. *)
+  module Underlying :
+    Irmin.Generic_key.S
+      with module Schema = Schema
+       and type repo = repo
+       and type t = t
+       and type node = node
+       and type tree = tree
+       and type commit = commit
+       and type slice = slice
+       and type contents_key = contents_key
+       and type node_key = node_key
+       and type commit_key = commit_key
+       and type Schema.Hash.t = hash
+
   (** {1 Type-level submodules} *)
 
   module Info : Irmin.Info.S with type t = info
@@ -1114,6 +1134,7 @@ module Make (S : Irmin.Generic_key.S) :
      and module Hash = S.Hash
      and module Path = S.Path
      and module Metadata = S.Metadata
+     and module Underlying = S
      and module Backend.Schema = S.Backend.Schema
      and type Backend.Contents.value = S.Backend.Contents.value
      and type Backend.Node.value = S.Backend.Node.value
@@ -1232,6 +1253,11 @@ end
 (** {1 Native Synchronisation}
 
     Lwt wrappers for [Irmin.Sync]. Mirrors the Irmin 3 API exactly. *)
+
+module type Lwt_store = S
+(** Alias for the top-level {!module-type-S}, so that {!Sync.Make} can refer to
+    it without colliding with [Sync]'s own [module type S]. *)
+
 module Sync : sig
   module type S = sig
     type db
@@ -1278,7 +1304,7 @@ module Sync : sig
     val push_exn : db -> ?depth:int -> Irmin.remote -> status Lwt.t
   end
 
-  module Make (X : Irmin.Generic_key.S) :
+  module Make (X : Lwt_store) :
     S with type db = X.t and type commit = X.commit and type info = X.info
 end
 
@@ -1309,7 +1335,7 @@ end
 (** {1 Graphviz output}
 
     Lwt wrapper for [Irmin.Dot]. *)
-module Dot : functor (S : Irmin.Generic_key.S) -> sig
+module Dot : functor (S : S) -> sig
   type db = S.t
 
   val output_buffer :

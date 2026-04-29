@@ -109,6 +109,23 @@ module type S = sig
   type kinded_key = [ `Contents of contents_key | `Node of node_key ]
   type watch
 
+  (** {1 Underlying direct-style store}
+
+      The Irmin 4 direct-style store this Lwt-flavoured shim wraps. *)
+  module Underlying :
+    Irmin.Generic_key.S
+      with module Schema = Schema
+       and type repo = repo
+       and type t = t
+       and type node = node
+       and type tree = tree
+       and type commit = commit
+       and type slice = slice
+       and type contents_key = contents_key
+       and type node_key = node_key
+       and type commit_key = commit_key
+       and type Schema.Hash.t = hash
+
   (** {1 Type-level submodules} *)
 
   module Info : Irmin.Info.S with type t = info
@@ -1047,6 +1064,11 @@ module Make (S : Irmin.Generic_key.S) = struct
   module History = S.History
   module Status = S.Status
 
+  (* The underlying direct-style Irmin 4 store. Exposed so that downstream
+     functors that need a [Generic_key.S] (e.g. [Sync.Make], [Dot]) can be
+     applied to the result of [Make]. *)
+  module Underlying = S
+
   (* Lwt-flavoured wrapper of [S.Backend]. The pure / type-level
      submodules ([Schema], [Hash], [Slice], [Node_portable],
      [Commit_portable]) are passed through as-is. The I/O ops of
@@ -1813,6 +1835,11 @@ module Pack = struct
   end
 end
 
+(* Alias for the top-level [module type S] of [Irmin_lwt], so that
+   [Sync.Make] can refer to it without colliding with [Sync]'s own
+   [module type S]. *)
+module type Lwt_store = S
+
 module Sync = struct
   module type S = sig
     type db
@@ -1859,8 +1886,8 @@ module Sync = struct
     val push_exn : db -> ?depth:int -> Irmin.remote -> status Lwt.t
   end
 
-  module Make (X : Irmin.Generic_key.S) = struct
-    module S = Irmin.Sync.Make (X)
+  module Make (X : Lwt_store) = struct
+    module S = Irmin.Sync.Make (X.Underlying)
 
     type db = X.t
     type commit = X.commit
@@ -1902,8 +1929,8 @@ struct
   let set t path v ~info = run_eio (fun () -> J.set t path v ~info)
 end
 
-module Dot (S : Irmin.Generic_key.S) = struct
-  module D = Irmin.Dot (S)
+module Dot (S : Lwt_store) = struct
+  module D = Irmin.Dot (S.Underlying)
 
   type db = S.t
 
