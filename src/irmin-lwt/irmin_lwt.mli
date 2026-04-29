@@ -25,8 +25,8 @@ val run_eio : (unit -> 'a) -> 'a Lwt.t
     yields while [f] is suspended in Eio.
 
     Use this to call Irmin 4 backend operations (which are direct-style) from
-    Lwt code without blocking other Lwt fibers. Must be invoked under an
-    active [Lwt_eio] event loop, i.e. inside {!run} or {!run_with_env}. *)
+    Lwt code without blocking other Lwt fibers. Must be invoked under an active
+    [Lwt_eio] event loop, i.e. inside {!run} or {!run_with_env}. *)
 
 (** Lwt-flavoured counterpart of the internal [Irmin.Closeable] trait: a single
     [close] operation that releases the resources held by a handle. Used as
@@ -36,6 +36,67 @@ module type Closeable = sig
   type 'a t
 
   val close : 'a t -> unit Lwt.t
+end
+
+(** Lwt-flavoured counterpart of [Irmin.Indexable.S]. The I/O-performing ops
+    ([mem], [find], [add], [unsafe_add], [index], [batch], [close]) return
+    ['_ Lwt.t]. The [merge] field stays a direct-style [Irmin.Merge.t] (the
+    merge combinator is direct-style in Irmin 4). *)
+module type Lwt_indexable_S = sig
+  type 'a t
+  type key
+  type value
+  type hash
+
+  val mem : [> Irmin.Perms.read ] t -> key -> bool Lwt.t
+  val find : [> Irmin.Perms.read ] t -> key -> value option Lwt.t
+  val close : 'a t -> unit Lwt.t
+  val add : [> Irmin.Perms.write ] t -> value -> key Lwt.t
+  val unsafe_add : [> Irmin.Perms.write ] t -> hash -> value -> key Lwt.t
+  val index : [> Irmin.Perms.read ] t -> hash -> key option Lwt.t
+
+  val batch :
+    Irmin.Perms.read t ->
+    ([ Irmin.Perms.read | Irmin.Perms.write ] t -> 'a Lwt.t) ->
+    'a Lwt.t
+
+  val merge :
+    [ Irmin.Perms.read | Irmin.Perms.write ] t -> key option Irmin.Merge.t
+
+  module Key : Irmin.Key.S with type t = key and type hash = hash
+end
+
+(** Lwt-flavoured counterpart of [Irmin.Atomic_write.S]. Every I/O-performing op
+    returns ['_ Lwt.t], and watch callbacks take ['_ Lwt.t]-returning functions.
+*)
+module type Lwt_atomic_write_S = sig
+  type t
+  type key
+  type value
+  type watch
+
+  val mem : t -> key -> bool Lwt.t
+  val find : t -> key -> value option Lwt.t
+  val close : t -> unit Lwt.t
+  val list : t -> key list Lwt.t
+  val set : t -> key -> value -> unit Lwt.t
+
+  val test_and_set :
+    t -> key -> test:value option -> set:value option -> bool Lwt.t
+
+  val remove : t -> key -> unit Lwt.t
+  val clear : t -> unit Lwt.t
+
+  val watch :
+    t ->
+    ?init:(key * value) list ->
+    (key -> value Irmin.Diff.t -> unit Lwt.t) ->
+    watch Lwt.t
+
+  val watch_key :
+    t -> key -> ?init:value -> (value Irmin.Diff.t -> unit Lwt.t) -> watch Lwt.t
+
+  val unwatch : t -> watch -> unit Lwt.t
 end
 
 (** The Lwt-flavoured counterpart of [Irmin.Generic_key.S].
@@ -89,14 +150,145 @@ module type S = sig
   module Path : Irmin.Path.S with type t = path and type step = step
   module Metadata : Irmin.Metadata.S with type t = metadata
 
-  module Backend :
-    Irmin.Backend.S
-      with module Schema = Schema
-      with type Slice.t = slice
-       and type Repo.t = repo
-       and type Contents.key = contents_key
-       and type Node.key = node_key
-       and type Commit.key = commit_key
+  (** Lwt-flavoured counterpart of [Irmin.Backend.S]. The submodules [Contents],
+      [Node], [Commit] use {!Lwt_indexable_S} (their I/O ops return ['_ Lwt.t]);
+      [Branch] uses {!Lwt_atomic_write_S}; [Repo.v], [Repo.close] and
+      [Repo.batch] are Lwt-flavoured (the
+      [contents_t]/[node_t]/[commit_t]/[branch_t] accessors stay direct, as they
+      perform no I/O). [Schema], [Hash], [Slice], [Node_portable],
+      [Commit_portable] are pure, kept as-is from the upstream backend. *)
+  module Backend : sig
+    module Schema : module type of Schema with module Hash = Schema.Hash
+    module Hash : Irmin.Hash.S with type t = Schema.Hash.t
+
+    module Contents : sig
+      include
+        Lwt_indexable_S
+          with type key = contents_key
+           and type hash = Schema.Hash.t
+           and type value = Schema.Contents.t
+
+      module Val : Irmin.Contents.S with type t = value
+
+      module Hash :
+        Irmin.Hash.Typed with type t = Schema.Hash.t and type value = value
+    end
+
+    module Node : sig
+      include
+        Lwt_indexable_S with type key = node_key and type hash = Schema.Hash.t
+
+      module Path : Irmin.Path.S with type t = path and type step = step
+      module Metadata : Irmin.Metadata.S with type t = metadata
+
+      module Val :
+        Irmin.Node.Generic_key.S
+          with type t = value
+           and type hash = Schema.Hash.t
+           and type node_key = key
+           and type metadata = metadata
+           and type step = step
+
+      module Hash :
+        Irmin.Hash.Typed with type t = Schema.Hash.t and type value = value
+
+      module Contents : module type of Contents with type key = contents_key
+    end
+
+    module Node_portable :
+      Irmin.Node.Portable.S
+        with type node := Node.value
+         and type hash := Schema.Hash.t
+         and type metadata := metadata
+         and type step := step
+
+    module Commit : sig
+      include
+        Lwt_indexable_S with type key = commit_key and type hash = Schema.Hash.t
+
+      module Info : Irmin.Info.S with type t = info
+
+      module Val :
+        Irmin.Commit.Generic_key.S
+          with type t = value
+           and type commit_key = key
+           and module Info := Schema.Info
+
+      module Hash :
+        Irmin.Hash.Typed with type t = Schema.Hash.t and type value = value
+
+      module Node : module type of Node with type key = node_key
+
+      val merge :
+        [> Irmin.Perms.read_write ] t -> info:Info.f -> key option Irmin.Merge.t
+    end
+
+    module Commit_portable :
+      Irmin.Commit.Portable.S
+        with type commit := Commit.value
+         and type hash := Schema.Hash.t
+         and module Info = Schema.Info
+
+    module Branch : sig
+      include
+        Lwt_atomic_write_S with type key = branch and type value = commit_key
+
+      module Key : Irmin.Branch.S with type t = key
+      module Val : Irmin.Key.S with type t = value
+    end
+
+    module Slice :
+      Irmin.Backend.Slice.S
+        with type t = slice
+         and type contents = Schema.Hash.t * Schema.Contents.t
+         and type node = Schema.Hash.t * Node.value
+         and type commit = Schema.Hash.t * Commit.value
+
+    module Repo : sig
+      type nonrec t = repo
+
+      val v : Irmin.Backend.Conf.t -> t Lwt.t
+      val close : t -> unit Lwt.t
+      val contents_t : t -> Irmin.Perms.read Contents.t
+      val node_t : t -> Irmin.Perms.read Node.t
+      val commit_t : t -> Irmin.Perms.read Commit.t
+      val config : t -> Irmin.Backend.Conf.t
+
+      val batch :
+        ?lock:bool ->
+        t ->
+        (Irmin.Perms.read_write Contents.t ->
+        Irmin.Perms.read_write Node.t ->
+        Irmin.Perms.read_write Commit.t ->
+        'a Lwt.t) ->
+        'a Lwt.t
+
+      val branch_t : t -> Branch.t
+    end
+
+    module Remote : sig
+      type t
+      type endpoint
+      type nonrec commit = commit_key
+      type nonrec branch = branch
+
+      val fetch :
+        t ->
+        ?depth:int ->
+        endpoint ->
+        branch ->
+        (commit option, [ `Msg of string ]) result Lwt.t
+
+      val push :
+        t ->
+        ?depth:int ->
+        endpoint ->
+        branch ->
+        (unit, [ `Msg of string | `Detached_head ]) result Lwt.t
+
+      val v : Repo.t -> t
+    end
+  end
 
   module Contents : sig
     include Irmin.Contents.S with type t = contents
@@ -922,7 +1114,15 @@ module Make (S : Irmin.Generic_key.S) :
      and module Hash = S.Hash
      and module Path = S.Path
      and module Metadata = S.Metadata
-     and module Backend = S.Backend
+     and module Backend.Schema = S.Backend.Schema
+     and type Backend.Contents.value = S.Backend.Contents.value
+     and type Backend.Node.value = S.Backend.Node.value
+     and type Backend.Node.Val.t = S.Backend.Node.Val.t
+     and type Backend.Commit.value = S.Backend.Commit.value
+     and type Backend.Commit.Val.t = S.Backend.Commit.Val.t
+     and type Backend.Slice.t = S.Backend.Slice.t
+     and type Backend.Branch.watch = S.Backend.Branch.watch
+     and type Backend.Remote.endpoint = S.Backend.Remote.endpoint
      and module History = S.History
      and type Repo.elt = S.Repo.elt
      and type Tree.kinded_hash = S.Tree.kinded_hash

@@ -21,6 +21,60 @@ module type Closeable = sig
   val close : 'a t -> unit Lwt.t
 end
 
+module type Lwt_indexable_S = sig
+  type 'a t
+  type key
+  type value
+  type hash
+
+  val mem : [> Irmin.Perms.read ] t -> key -> bool Lwt.t
+  val find : [> Irmin.Perms.read ] t -> key -> value option Lwt.t
+  val close : 'a t -> unit Lwt.t
+  val add : [> Irmin.Perms.write ] t -> value -> key Lwt.t
+  val unsafe_add : [> Irmin.Perms.write ] t -> hash -> value -> key Lwt.t
+  val index : [> Irmin.Perms.read ] t -> hash -> key option Lwt.t
+
+  val batch :
+    Irmin.Perms.read t ->
+    ([ Irmin.Perms.read | Irmin.Perms.write ] t -> 'a Lwt.t) ->
+    'a Lwt.t
+
+  val merge :
+    [ Irmin.Perms.read | Irmin.Perms.write ] t -> key option Irmin.Merge.t
+
+  module Key : Irmin.Key.S with type t = key and type hash = hash
+end
+
+module type Lwt_atomic_write_S = sig
+  type t
+  type key
+  type value
+  type watch
+
+  val mem : t -> key -> bool Lwt.t
+  val find : t -> key -> value option Lwt.t
+  val close : t -> unit Lwt.t
+  val list : t -> key list Lwt.t
+  val set : t -> key -> value -> unit Lwt.t
+
+  val test_and_set :
+    t -> key -> test:value option -> set:value option -> bool Lwt.t
+
+  val remove : t -> key -> unit Lwt.t
+  val clear : t -> unit Lwt.t
+
+  val watch :
+    t ->
+    ?init:(key * value) list ->
+    (key -> value Irmin.Diff.t -> unit Lwt.t) ->
+    watch Lwt.t
+
+  val watch_key :
+    t -> key -> ?init:value -> (value Irmin.Diff.t -> unit Lwt.t) -> watch Lwt.t
+
+  val unwatch : t -> watch -> unit Lwt.t
+end
+
 module type S = sig
   (** {1 Schema} *)
 
@@ -62,14 +116,138 @@ module type S = sig
   module Path : Irmin.Path.S with type t = path and type step = step
   module Metadata : Irmin.Metadata.S with type t = metadata
 
-  module Backend :
-    Irmin.Backend.S
-      with module Schema = Schema
-      with type Slice.t = slice
-       and type Repo.t = repo
-       and type Contents.key = contents_key
-       and type Node.key = node_key
-       and type Commit.key = commit_key
+  module Backend : sig
+    module Schema : module type of Schema with module Hash = Schema.Hash
+    module Hash : Irmin.Hash.S with type t = Schema.Hash.t
+
+    module Contents : sig
+      include
+        Lwt_indexable_S
+          with type key = contents_key
+           and type hash = Schema.Hash.t
+           and type value = Schema.Contents.t
+
+      module Val : Irmin.Contents.S with type t = value
+
+      module Hash :
+        Irmin.Hash.Typed with type t = Schema.Hash.t and type value = value
+    end
+
+    module Node : sig
+      include
+        Lwt_indexable_S with type key = node_key and type hash = Schema.Hash.t
+
+      module Path : Irmin.Path.S with type t = path and type step = step
+      module Metadata : Irmin.Metadata.S with type t = metadata
+
+      module Val :
+        Irmin.Node.Generic_key.S
+          with type t = value
+           and type hash = Schema.Hash.t
+           and type node_key = key
+           and type metadata = metadata
+           and type step = step
+
+      module Hash :
+        Irmin.Hash.Typed with type t = Schema.Hash.t and type value = value
+
+      module Contents : module type of Contents with type key = contents_key
+    end
+
+    module Node_portable :
+      Irmin.Node.Portable.S
+        with type node := Node.value
+         and type hash := Schema.Hash.t
+         and type metadata := metadata
+         and type step := step
+
+    module Commit : sig
+      include
+        Lwt_indexable_S with type key = commit_key and type hash = Schema.Hash.t
+
+      module Info : Irmin.Info.S with type t = info
+
+      module Val :
+        Irmin.Commit.Generic_key.S
+          with type t = value
+           and type commit_key = key
+           and module Info := Schema.Info
+
+      module Hash :
+        Irmin.Hash.Typed with type t = Schema.Hash.t and type value = value
+
+      module Node : module type of Node with type key = node_key
+
+      val merge :
+        [> Irmin.Perms.read_write ] t -> info:Info.f -> key option Irmin.Merge.t
+    end
+
+    module Commit_portable :
+      Irmin.Commit.Portable.S
+        with type commit := Commit.value
+         and type hash := Schema.Hash.t
+         and module Info = Schema.Info
+
+    module Branch : sig
+      include
+        Lwt_atomic_write_S with type key = branch and type value = commit_key
+
+      module Key : Irmin.Branch.S with type t = key
+      module Val : Irmin.Key.S with type t = value
+    end
+
+    module Slice :
+      Irmin.Backend.Slice.S
+        with type t = slice
+         and type contents = Schema.Hash.t * Schema.Contents.t
+         and type node = Schema.Hash.t * Node.value
+         and type commit = Schema.Hash.t * Commit.value
+
+    module Repo : sig
+      type nonrec t = repo
+
+      val v : Irmin.Backend.Conf.t -> t Lwt.t
+      val close : t -> unit Lwt.t
+      val contents_t : t -> Irmin.Perms.read Contents.t
+      val node_t : t -> Irmin.Perms.read Node.t
+      val commit_t : t -> Irmin.Perms.read Commit.t
+      val config : t -> Irmin.Backend.Conf.t
+
+      val batch :
+        ?lock:bool ->
+        t ->
+        (Irmin.Perms.read_write Contents.t ->
+        Irmin.Perms.read_write Node.t ->
+        Irmin.Perms.read_write Commit.t ->
+        'a Lwt.t) ->
+        'a Lwt.t
+
+      val branch_t : t -> Branch.t
+    end
+
+    module Remote : sig
+      type t
+      type endpoint
+      type nonrec commit = commit_key
+      type nonrec branch = branch
+
+      val fetch :
+        t ->
+        ?depth:int ->
+        endpoint ->
+        branch ->
+        (commit option, [ `Msg of string ]) result Lwt.t
+
+      val push :
+        t ->
+        ?depth:int ->
+        endpoint ->
+        branch ->
+        (unit, [ `Msg of string | `Detached_head ]) result Lwt.t
+
+      val v : Repo.t -> t
+    end
+  end
 
   module Contents : sig
     include Irmin.Contents.S with type t = contents
@@ -866,9 +1044,178 @@ module Make (S : Irmin.Generic_key.S) = struct
   module Hash = S.Hash
   module Path = S.Path
   module Metadata = S.Metadata
-  module Backend = S.Backend
   module History = S.History
   module Status = S.Status
+
+  (* Lwt-flavoured wrapper of [S.Backend]. The pure / type-level
+     submodules ([Schema], [Hash], [Slice], [Node_portable],
+     [Commit_portable]) are passed through as-is. The I/O ops of
+     [Contents], [Node], [Commit], [Branch] and [Repo] are bridged via
+     [run_eio]; callbacks given to [batch] / [watch] / [watch_key] return
+     ['_ Lwt.t] and are awaited with [Lwt_eio.Promise.await_lwt] before
+     being handed to the underlying direct-style implementation. *)
+  module Backend = struct
+    module Schema = S.Backend.Schema
+    module Hash = S.Backend.Hash
+
+    module Contents = struct
+      module Val = S.Backend.Contents.Val
+      module Hash = S.Backend.Contents.Hash
+      module Key = S.Backend.Contents.Key
+
+      type 'a t = 'a S.Backend.Contents.t
+      type key = S.Backend.Contents.key
+      type value = S.Backend.Contents.value
+      type hash = S.Backend.Contents.hash
+
+      let mem t k = run_eio (fun () -> S.Backend.Contents.mem t k)
+      let find t k = run_eio (fun () -> S.Backend.Contents.find t k)
+      let close t = run_eio (fun () -> S.Backend.Contents.close t)
+      let add t v = run_eio (fun () -> S.Backend.Contents.add t v)
+
+      let unsafe_add t h v =
+        run_eio (fun () -> S.Backend.Contents.unsafe_add t h v)
+
+      let index t h = run_eio (fun () -> S.Backend.Contents.index t h)
+
+      let batch t f =
+        run_eio (fun () ->
+            S.Backend.Contents.batch t (fun rw ->
+                Lwt_eio.Promise.await_lwt (f rw)))
+
+      let merge = S.Backend.Contents.merge
+    end
+
+    module Node = struct
+      module Path = S.Backend.Node.Path
+      module Metadata = S.Backend.Node.Metadata
+      module Val = S.Backend.Node.Val
+      module Hash = S.Backend.Node.Hash
+      module Contents = Contents
+      module Key = S.Backend.Node.Key
+
+      type 'a t = 'a S.Backend.Node.t
+      type key = S.Backend.Node.key
+      type value = S.Backend.Node.value
+      type hash = S.Backend.Node.hash
+
+      let mem t k = run_eio (fun () -> S.Backend.Node.mem t k)
+      let find t k = run_eio (fun () -> S.Backend.Node.find t k)
+      let close t = run_eio (fun () -> S.Backend.Node.close t)
+      let add t v = run_eio (fun () -> S.Backend.Node.add t v)
+      let unsafe_add t h v = run_eio (fun () -> S.Backend.Node.unsafe_add t h v)
+      let index t h = run_eio (fun () -> S.Backend.Node.index t h)
+
+      let batch t f =
+        run_eio (fun () ->
+            S.Backend.Node.batch t (fun rw -> Lwt_eio.Promise.await_lwt (f rw)))
+
+      let merge = S.Backend.Node.merge
+    end
+
+    module Node_portable = S.Backend.Node_portable
+
+    module Commit = struct
+      module Info = S.Backend.Commit.Info
+      module Val = S.Backend.Commit.Val
+      module Hash = S.Backend.Commit.Hash
+      module Node = Node
+      module Key = S.Backend.Commit.Key
+
+      type 'a t = 'a S.Backend.Commit.t
+      type key = S.Backend.Commit.key
+      type value = S.Backend.Commit.value
+      type hash = S.Backend.Commit.hash
+
+      let mem t k = run_eio (fun () -> S.Backend.Commit.mem t k)
+      let find t k = run_eio (fun () -> S.Backend.Commit.find t k)
+      let close t = run_eio (fun () -> S.Backend.Commit.close t)
+      let add t v = run_eio (fun () -> S.Backend.Commit.add t v)
+
+      let unsafe_add t h v =
+        run_eio (fun () -> S.Backend.Commit.unsafe_add t h v)
+
+      let index t h = run_eio (fun () -> S.Backend.Commit.index t h)
+
+      let batch t f =
+        run_eio (fun () ->
+            S.Backend.Commit.batch t (fun rw ->
+                Lwt_eio.Promise.await_lwt (f rw)))
+
+      let merge = S.Backend.Commit.merge
+    end
+
+    module Commit_portable = S.Backend.Commit_portable
+
+    module Branch = struct
+      module Key = S.Backend.Branch.Key
+      module Val = S.Backend.Branch.Val
+
+      type t = S.Backend.Branch.t
+      type key = S.Backend.Branch.key
+      type value = S.Backend.Branch.value
+      type watch = S.Backend.Branch.watch
+
+      let mem t k = run_eio (fun () -> S.Backend.Branch.mem t k)
+      let find t k = run_eio (fun () -> S.Backend.Branch.find t k)
+      let close t = run_eio (fun () -> S.Backend.Branch.close t)
+      let list t = run_eio (fun () -> S.Backend.Branch.list t)
+      let set t k v = run_eio (fun () -> S.Backend.Branch.set t k v)
+
+      let test_and_set t k ~test ~set =
+        run_eio (fun () -> S.Backend.Branch.test_and_set t k ~test ~set)
+
+      let remove t k = run_eio (fun () -> S.Backend.Branch.remove t k)
+      let clear t = run_eio (fun () -> S.Backend.Branch.clear t)
+
+      let watch t ?init f =
+        run_eio (fun () ->
+            S.Backend.Branch.watch t ?init (fun k diff ->
+                Lwt_eio.Promise.await_lwt (f k diff)))
+
+      let watch_key t k ?init f =
+        run_eio (fun () ->
+            S.Backend.Branch.watch_key t k ?init (fun diff ->
+                Lwt_eio.Promise.await_lwt (f diff)))
+
+      let unwatch t w = run_eio (fun () -> S.Backend.Branch.unwatch t w)
+    end
+
+    module Slice = S.Backend.Slice
+
+    module Repo = struct
+      type nonrec t = repo
+
+      let v config = run_eio (fun () -> S.Backend.Repo.v config)
+      let close t = run_eio (fun () -> S.Backend.Repo.close t)
+      let contents_t = S.Backend.Repo.contents_t
+      let node_t = S.Backend.Repo.node_t
+      let commit_t = S.Backend.Repo.commit_t
+      let config = S.Backend.Repo.config
+
+      let batch ?lock t f =
+        run_eio (fun () ->
+            S.Backend.Repo.batch ?lock t (fun c n cm ->
+                Lwt_eio.Promise.await_lwt (f c n cm)))
+
+      let branch_t = S.Backend.Repo.branch_t
+    end
+
+    module Remote = struct
+      type t = S.Backend.Remote.t
+      type endpoint = S.Backend.Remote.endpoint
+      type commit = S.Backend.Remote.commit
+      type branch = S.Backend.Remote.branch
+
+      let fetch t ?depth e b =
+        run_eio (fun () -> S.Backend.Remote.fetch t ?depth e b)
+
+      let push t ?depth e b =
+        run_eio (fun () -> S.Backend.Remote.push t ?depth e b)
+
+      let v r = S.Backend.Remote.v r
+    end
+  end
 
   module Contents = struct
     include (S.Contents : Irmin.Contents.S with type t = S.contents)
