@@ -43,7 +43,7 @@ end
     ['_ Lwt.t]. The [merge] field stays a direct-style [Irmin.Merge.t] (the
     merge combinator is direct-style in Irmin 4). *)
 module type Lwt_indexable_S = sig
-  type 'a t
+  type -'a t
   type key
   type value
   type hash

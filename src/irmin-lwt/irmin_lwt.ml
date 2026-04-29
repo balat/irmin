@@ -22,7 +22,7 @@ module type Closeable = sig
 end
 
 module type Lwt_indexable_S = sig
-  type 'a t
+  type -'a t
   type key
   type value
   type hash
