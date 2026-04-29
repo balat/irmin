@@ -75,6 +75,110 @@ module type Lwt_atomic_write_S = sig
   val unwatch : t -> watch -> unit Lwt.t
 end
 
+module type Lwt_node_graph_S = sig
+  type 'a t
+  type metadata
+  type contents_key
+  type node_key
+  type step
+  type path
+  type value = [ `Node of node_key | `Contents of contents_key * metadata ]
+
+  val empty : [> Irmin.Perms.write ] t -> node_key Lwt.t
+  val v : [> Irmin.Perms.write ] t -> (step * value) list -> node_key Lwt.t
+  val list : [> Irmin.Perms.read ] t -> node_key -> (step * value) list Lwt.t
+  val find : [> Irmin.Perms.read ] t -> node_key -> path -> value option Lwt.t
+
+  val add :
+    [> Irmin.Perms.read_write ] t -> node_key -> path -> value -> node_key Lwt.t
+
+  val remove :
+    [> Irmin.Perms.read_write ] t -> node_key -> path -> node_key Lwt.t
+
+  val closure :
+    [> Irmin.Perms.read ] t ->
+    min:node_key list ->
+    max:node_key list ->
+    node_key list Lwt.t
+
+  val iter :
+    [> Irmin.Perms.read ] t ->
+    min:node_key list ->
+    max:node_key list ->
+    ?node:(node_key -> unit Lwt.t) ->
+    ?contents:(contents_key -> unit Lwt.t) ->
+    ?edge:(node_key -> node_key -> unit Lwt.t) ->
+    ?skip_node:(node_key -> bool Lwt.t) ->
+    ?skip_contents:(contents_key -> bool Lwt.t) ->
+    ?rev:bool ->
+    unit ->
+    unit Lwt.t
+end
+
+module type Lwt_commit_history_S = sig
+  type 'a t
+  type node_key
+  type commit_key
+  type v
+  type info
+
+  val v :
+    [> Irmin.Perms.write ] t ->
+    node:node_key ->
+    parents:commit_key list ->
+    info:info ->
+    (commit_key * v) Lwt.t
+
+  val parents : [> Irmin.Perms.read ] t -> commit_key -> commit_key list Lwt.t
+
+  val merge :
+    [> Irmin.Perms.read_write ] t ->
+    info:(unit -> info) ->
+    commit_key Irmin.Merge.t
+
+  val lcas :
+    [> Irmin.Perms.read ] t ->
+    ?max_depth:int ->
+    ?n:int ->
+    commit_key ->
+    commit_key ->
+    (commit_key list, [ `Max_depth_reached | `Too_many_lcas ]) result Lwt.t
+
+  val lca :
+    [> Irmin.Perms.read_write ] t ->
+    info:(unit -> info) ->
+    ?max_depth:int ->
+    ?n:int ->
+    commit_key list ->
+    (commit_key option, Irmin.Merge.conflict) result Lwt.t
+
+  val three_way_merge :
+    [> Irmin.Perms.read_write ] t ->
+    info:(unit -> info) ->
+    ?max_depth:int ->
+    ?n:int ->
+    commit_key ->
+    commit_key ->
+    (commit_key, Irmin.Merge.conflict) result Lwt.t
+
+  val closure :
+    [> Irmin.Perms.read ] t ->
+    min:commit_key list ->
+    max:commit_key list ->
+    commit_key list Lwt.t
+
+  val iter :
+    [> Irmin.Perms.read ] t ->
+    min:commit_key list ->
+    max:commit_key list ->
+    ?commit:(commit_key -> unit Lwt.t) ->
+    ?edge:(commit_key -> commit_key -> unit Lwt.t) ->
+    ?skip:(commit_key -> bool Lwt.t) ->
+    ?rev:bool ->
+    unit ->
+    unit Lwt.t
+end
+
 module type S = sig
   (** {1 Schema} *)
 
@@ -1839,6 +1943,82 @@ end
    [Sync.Make] can refer to it without colliding with [Sync]'s own
    [module type S]. *)
 module type Lwt_store = S
+
+module Node = struct
+  module Graph (X : Lwt_store) = struct
+    module G = Irmin.Node.Graph (X.Underlying.Backend.Node)
+
+    type 'a t = 'a X.Underlying.Backend.Node.t
+    type metadata = X.metadata
+    type contents_key = X.contents_key
+    type node_key = X.node_key
+    type step = X.step
+    type path = X.path
+    type value = [ `Node of node_key | `Contents of contents_key * metadata ]
+
+    let empty t = run_eio (fun () -> G.empty t)
+    let v t kvs = run_eio (fun () -> G.v t kvs)
+    let list t k = run_eio (fun () -> G.list t k)
+    let find t k p = run_eio (fun () -> G.find t k p)
+    let add t k p v = run_eio (fun () -> G.add t k p v)
+    let remove t k p = run_eio (fun () -> G.remove t k p)
+    let closure t ~min ~max = run_eio (fun () -> G.closure t ~min ~max)
+
+    let iter t ~min ~max ?node ?contents ?edge ?skip_node ?skip_contents ?rev ()
+        =
+      let lift1 f = Option.map (fun g x -> Lwt_eio.Promise.await_lwt (g x)) f in
+      let lift2 f =
+        Option.map (fun g x y -> Lwt_eio.Promise.await_lwt (g x y)) f
+      in
+      let node = lift1 node in
+      let contents = lift1 contents in
+      let edge = lift2 edge in
+      let skip_node = lift1 skip_node in
+      let skip_contents = lift1 skip_contents in
+      run_eio (fun () ->
+          G.iter t ~min ~max ?node ?contents ?edge ?skip_node ?skip_contents
+            ?rev ())
+  end
+end
+
+module Commit = struct
+  module History (X : Lwt_store) = struct
+    module H = Irmin.Commit.History (X.Underlying.Backend.Commit)
+
+    type 'a t = 'a X.Underlying.Backend.Commit.t
+    type node_key = X.node_key
+    type commit_key = X.commit_key
+    type v = X.Underlying.Backend.Commit.value
+    type info = X.info
+
+    let v t ~node ~parents ~info =
+      run_eio (fun () -> H.v t ~node ~parents ~info)
+
+    let parents t k = run_eio (fun () -> H.parents t k)
+    let merge t ~info = H.merge t ~info
+
+    let lcas t ?max_depth ?n c1 c2 =
+      run_eio (fun () -> H.lcas t ?max_depth ?n c1 c2)
+
+    let lca t ~info ?max_depth ?n cs =
+      run_eio (fun () -> H.lca t ~info ?max_depth ?n cs)
+
+    let three_way_merge t ~info ?max_depth ?n c1 c2 =
+      run_eio (fun () -> H.three_way_merge t ~info ?max_depth ?n c1 c2)
+
+    let closure t ~min ~max = run_eio (fun () -> H.closure t ~min ~max)
+
+    let iter t ~min ~max ?commit ?edge ?skip ?rev () =
+      let lift1 f = Option.map (fun g x -> Lwt_eio.Promise.await_lwt (g x)) f in
+      let lift2 f =
+        Option.map (fun g x y -> Lwt_eio.Promise.await_lwt (g x y)) f
+      in
+      let commit = lift1 commit in
+      let edge = lift2 edge in
+      let skip = lift1 skip in
+      run_eio (fun () -> H.iter t ~min ~max ?commit ?edge ?skip ?rev ())
+  end
+end
 
 module Sync = struct
   module type S = sig

@@ -99,6 +99,116 @@ module type Lwt_atomic_write_S = sig
   val unwatch : t -> watch -> unit Lwt.t
 end
 
+(** Lwt-flavoured counterpart of [Irmin.Node.Graph]'s output signature. Every
+    I/O-performing op returns ['_ Lwt.t]; the [iter] callbacks take
+    ['_ Lwt.t]-returning functions. *)
+module type Lwt_node_graph_S = sig
+  type 'a t
+  type metadata
+  type contents_key
+  type node_key
+  type step
+  type path
+  type value = [ `Node of node_key | `Contents of contents_key * metadata ]
+
+  val empty : [> Irmin.Perms.write ] t -> node_key Lwt.t
+  val v : [> Irmin.Perms.write ] t -> (step * value) list -> node_key Lwt.t
+  val list : [> Irmin.Perms.read ] t -> node_key -> (step * value) list Lwt.t
+  val find : [> Irmin.Perms.read ] t -> node_key -> path -> value option Lwt.t
+
+  val add :
+    [> Irmin.Perms.read_write ] t -> node_key -> path -> value -> node_key Lwt.t
+
+  val remove :
+    [> Irmin.Perms.read_write ] t -> node_key -> path -> node_key Lwt.t
+
+  val closure :
+    [> Irmin.Perms.read ] t ->
+    min:node_key list ->
+    max:node_key list ->
+    node_key list Lwt.t
+
+  val iter :
+    [> Irmin.Perms.read ] t ->
+    min:node_key list ->
+    max:node_key list ->
+    ?node:(node_key -> unit Lwt.t) ->
+    ?contents:(contents_key -> unit Lwt.t) ->
+    ?edge:(node_key -> node_key -> unit Lwt.t) ->
+    ?skip_node:(node_key -> bool Lwt.t) ->
+    ?skip_contents:(contents_key -> bool Lwt.t) ->
+    ?rev:bool ->
+    unit ->
+    unit Lwt.t
+end
+
+(** Lwt-flavoured counterpart of [Irmin.Commit.History]'s output signature.
+    Every I/O-performing op returns ['_ Lwt.t]; [merge] stays a direct-style
+    [Irmin.Merge.t] (the merge combinator is direct in Irmin 4). *)
+module type Lwt_commit_history_S = sig
+  type 'a t
+  type node_key
+  type commit_key
+  type v
+  type info
+
+  val v :
+    [> Irmin.Perms.write ] t ->
+    node:node_key ->
+    parents:commit_key list ->
+    info:info ->
+    (commit_key * v) Lwt.t
+
+  val parents : [> Irmin.Perms.read ] t -> commit_key -> commit_key list Lwt.t
+
+  val merge :
+    [> Irmin.Perms.read_write ] t ->
+    info:(unit -> info) ->
+    commit_key Irmin.Merge.t
+
+  val lcas :
+    [> Irmin.Perms.read ] t ->
+    ?max_depth:int ->
+    ?n:int ->
+    commit_key ->
+    commit_key ->
+    (commit_key list, [ `Max_depth_reached | `Too_many_lcas ]) result Lwt.t
+
+  val lca :
+    [> Irmin.Perms.read_write ] t ->
+    info:(unit -> info) ->
+    ?max_depth:int ->
+    ?n:int ->
+    commit_key list ->
+    (commit_key option, Irmin.Merge.conflict) result Lwt.t
+
+  val three_way_merge :
+    [> Irmin.Perms.read_write ] t ->
+    info:(unit -> info) ->
+    ?max_depth:int ->
+    ?n:int ->
+    commit_key ->
+    commit_key ->
+    (commit_key, Irmin.Merge.conflict) result Lwt.t
+
+  val closure :
+    [> Irmin.Perms.read ] t ->
+    min:commit_key list ->
+    max:commit_key list ->
+    commit_key list Lwt.t
+
+  val iter :
+    [> Irmin.Perms.read ] t ->
+    min:commit_key list ->
+    max:commit_key list ->
+    ?commit:(commit_key -> unit Lwt.t) ->
+    ?edge:(commit_key -> commit_key -> unit Lwt.t) ->
+    ?skip:(commit_key -> bool Lwt.t) ->
+    ?rev:bool ->
+    unit ->
+    unit Lwt.t
+end
+
 (** The Lwt-flavoured counterpart of [Irmin.Generic_key.S].
 
     Every I/O-triggering operation of [Irmin.Generic_key.S] is replaced by a
@@ -1257,6 +1367,32 @@ end
 module type Lwt_store = S
 (** Alias for the top-level {!module-type-S}, so that {!Sync.Make} can refer to
     it without colliding with [Sync]'s own [module type S]. *)
+
+(** {1 Node and commit graphs}
+
+    Lwt wrappers for [Irmin.Node.Graph] and [Irmin.Commit.History]. Mirrors the
+    Irmin 3 API: I/O ops and traversal callbacks are Lwt-flavoured. *)
+
+module Node : sig
+  module Graph (X : Lwt_store) :
+    Lwt_node_graph_S
+      with type 'a t = 'a X.Underlying.Backend.Node.t
+       and type metadata = X.metadata
+       and type contents_key = X.contents_key
+       and type node_key = X.node_key
+       and type step = X.step
+       and type path = X.path
+end
+
+module Commit : sig
+  module History (X : Lwt_store) :
+    Lwt_commit_history_S
+      with type 'a t = 'a X.Underlying.Backend.Commit.t
+       and type node_key = X.node_key
+       and type commit_key = X.commit_key
+       and type info = X.info
+       and type v = X.Underlying.Backend.Commit.value
+end
 
 module Sync : sig
   module type S = sig
