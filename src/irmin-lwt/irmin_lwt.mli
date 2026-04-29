@@ -19,6 +19,15 @@ val run_with_env : < clock : _ Eio.Time.clock ; .. > -> (unit -> 'a Lwt.t) -> 'a
     instead of calling [Eio_main.run] internally. Useful when the client is
     already inside an Eio event loop. *)
 
+val run_eio : (unit -> 'a) -> 'a Lwt.t
+(** [run_eio f] runs the direct-style Eio computation [f ()] inside the
+    [Lwt_eio] bridge and returns its result as an [Lwt.t]. The Lwt scheduler
+    yields while [f] is suspended in Eio.
+
+    Use this to call Irmin 4 backend operations (which are direct-style) from
+    Lwt code without blocking other Lwt fibers. Must be invoked under an
+    active [Lwt_eio] event loop, i.e. inside {!run} or {!run_with_env}. *)
+
 (** Lwt-flavoured counterpart of the internal [Irmin.Closeable] trait: a single
     [close] operation that releases the resources held by a handle. Used as
     [include Closeable with type _ t := t] in [S.Repo] to mirror the Irmin 3
