@@ -1410,6 +1410,39 @@ module Commit : sig
        and type v = X.Underlying.Backend.Commit.value
 end
 
+(** Lwt-flavoured shadow of [Irmin.Merge.f]. Other [Irmin.Merge] combinators
+    are pure and reusable as-is via [Irmin.Merge.X]. *)
+module Merge : sig
+  type 'a promise =
+    unit -> ('a option, Irmin.Merge.conflict) result Lwt.t
+  (** Lwt-flavoured promise: invoking it returns a [_ Lwt.t]. Matches the
+      [type 'a promise] of Irmin 3.11. *)
+
+  val f :
+    'a Irmin.Merge.t ->
+    old:'a promise ->
+    'a ->
+    'a ->
+    ('a, Irmin.Merge.conflict) result Lwt.t
+  (** [f m ~old x y] is the merge function bound by [m], wrapped to accept an
+      Lwt-flavoured [old] and return its result as an [Lwt.t]. Mirrors the
+      signature of [Irmin.Merge.f] in Irmin 3.11. *)
+
+  val promise : 'a -> 'a promise
+  (** [promise a] is the Lwt-flavoured promise that always returns [Some a]. *)
+
+  val ok : 'a -> ('a, Irmin.Merge.conflict) result Lwt.t
+  (** [ok a] is [Lwt.return (Ok a)]. Mirrors [Irmin.Merge.ok] of Irmin 3.11
+      (which returned a [Lwt.t]). *)
+
+  type 'a f =
+    old:'a promise -> 'a -> 'a -> ('a, Irmin.Merge.conflict) result Lwt.t
+  (** Lwt-flavoured merge function type. *)
+
+  val v : 'a Irmin.Type.t -> 'a f -> 'a Irmin.Merge.t
+  (** [v dt f] builds a merge combinator from an Lwt-flavoured merge function. *)
+end
+
 module Sync : sig
   module type S = sig
     type db

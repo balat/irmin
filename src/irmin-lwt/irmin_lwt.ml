@@ -2023,6 +2023,28 @@ module Commit = struct
   end
 end
 
+module Merge = struct
+  type 'a promise = unit -> ('a option, Irmin.Merge.conflict) result Lwt.t
+
+  let f m ~old x y =
+    run_eio (fun () ->
+        let old () = Lwt_eio.Promise.await_lwt (old ()) in
+        Irmin.Merge.f m ~old x y)
+
+  let promise a () = Lwt.return_ok (Some a)
+  let ok a = Lwt.return_ok a
+
+  type 'a f =
+    old:'a promise -> 'a -> 'a -> ('a, Irmin.Merge.conflict) result Lwt.t
+
+  let v dt (f : 'a f) =
+    let f_direct ~old x y =
+      let old_lwt () = Lwt.return (old ()) in
+      Lwt_eio.Promise.await_lwt (f ~old:old_lwt x y)
+    in
+    Irmin.Merge.v dt f_direct
+end
+
 module Sync = struct
   module type S = sig
     type db
