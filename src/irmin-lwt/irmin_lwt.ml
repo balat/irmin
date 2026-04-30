@@ -804,7 +804,13 @@ module type S = sig
     type depth =
       [ `Eq of int | `Le of int | `Lt of int | `Ge of int | `Gt of int ]
 
-    type stats
+    type stats = {
+      nodes : int;
+      leafs : int;
+      skips : int;
+      depth : int;
+      width : int;
+    }
 
     val kinded_key_t : kinded_key Irmin.Type.t
     val stats_t : stats Irmin.Type.t
@@ -1636,10 +1642,13 @@ module Make (S : Irmin.Generic_key.S) = struct
     type concrete =
       [ `Tree of (step * concrete) list | `Contents of contents * metadata ]
 
-    (* [stats] is a record. We keep it as an alias of [S.Tree.stats] so
-       it remains nominally compatible. Field access is exposed through
-       [stats_t] / [Irmin.Type] introspection. *)
-    type stats = S.Tree.stats
+    type stats = S.Tree.stats = {
+      nodes : int;
+      leafs : int;
+      skips : int;
+      depth : int;
+      width : int;
+    }
 
     let kinded_key_t = S.Tree.kinded_key_t
     let stats_t = S.Tree.stats_t

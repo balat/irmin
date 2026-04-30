@@ -862,11 +862,14 @@ module type S = sig
     type depth =
       [ `Eq of int | `Le of int | `Lt of int | `Ge of int | `Gt of int ]
 
-    type stats
-    (** Tree statistics. The record fields ([nodes], [leafs], [skips], [depth],
-        [width]) cannot be exposed through the functor boundary, but the
-        [Irmin.Type.t] descriptor [stats_t] gives field access via [Irmin.Type]
-        introspection. *)
+    type stats = {
+      nodes : int;  (** Number of nodes. *)
+      leafs : int;  (** Number of leafs. *)
+      skips : int;  (** Number of lazy nodes. *)
+      depth : int;  (** Maximal depth. *)
+      width : int;  (** Maximal width. *)
+    }
+    (** Tree statistics. *)
 
     val kinded_key_t : kinded_key Irmin.Type.t
     val stats_t : stats Irmin.Type.t
