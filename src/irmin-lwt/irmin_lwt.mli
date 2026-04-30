@@ -872,6 +872,7 @@ module type S = sig
     (** Tree statistics. *)
 
     val kinded_key_t : kinded_key Irmin.Type.t
+    val depth_t : depth Irmin.Type.t
     val stats_t : stats Irmin.Type.t
 
     type concrete =

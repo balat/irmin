@@ -813,6 +813,7 @@ module type S = sig
     }
 
     val kinded_key_t : kinded_key Irmin.Type.t
+    val depth_t : depth Irmin.Type.t
     val stats_t : stats Irmin.Type.t
 
     type concrete =
@@ -1663,7 +1664,25 @@ module Make (S : Irmin.Generic_key.S) = struct
       width : int;
     }
 
+    type depth = S.Tree.depth
+
     let kinded_key_t = S.Tree.kinded_key_t
+
+    let depth_t : depth Irmin.Type.t =
+      let open Irmin.Type in
+      variant "depth" (fun eq le lt ge gt -> function
+        | `Eq i -> eq i
+        | `Le i -> le i
+        | `Lt i -> lt i
+        | `Ge i -> ge i
+        | `Gt i -> gt i)
+      |~ case1 "Eq" int (fun i -> `Eq i)
+      |~ case1 "Le" int (fun i -> `Le i)
+      |~ case1 "Lt" int (fun i -> `Lt i)
+      |~ case1 "Ge" int (fun i -> `Ge i)
+      |~ case1 "Gt" int (fun i -> `Gt i)
+      |> sealv
+
     let stats_t = S.Tree.stats_t
 
     type error = S.Tree.error
@@ -1745,7 +1764,6 @@ module Make (S : Irmin.Generic_key.S) = struct
     type 'a force = [ `True | `False of path -> 'a -> 'a Lwt.t ]
     type uniq = [ `False | `True | `Marks of marks ]
     type ('a, 'b) folder = path -> 'b -> 'a -> 'a Lwt.t
-    type depth = S.Tree.depth
 
     let lift_folder = function
       | None -> None
