@@ -970,6 +970,7 @@ module type S = sig
 
       type t
 
+      val t : t Irmin.Type.t
       val v : before:kinded_hash -> after:kinded_hash -> tree -> t
       val before : t -> kinded_hash
       val after : t -> kinded_hash
@@ -1836,6 +1837,7 @@ module Make (S : Irmin.Generic_key.S) = struct
 
       type t = S.Tree.Proof.t
 
+      let t = S.Tree.Proof.t
       let v = S.Tree.Proof.v
       let before = S.Tree.Proof.before
       let after = S.Tree.Proof.after

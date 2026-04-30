@@ -1047,6 +1047,7 @@ module type S = sig
       type t
       (** The type for Merkle proofs. *)
 
+      val t : t Irmin.Type.t
       val v : before:kinded_hash -> after:kinded_hash -> tree -> t
       val before : t -> kinded_hash
       val after : t -> kinded_hash
