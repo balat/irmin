@@ -994,7 +994,20 @@ module type S = sig
 
     (** {2 Performance counters and inspection} *)
 
-    type counters
+    type counters = {
+      contents_hash : int;
+      contents_find : int;
+      contents_add : int;
+      contents_mem : int;
+      node_hash : int;
+      node_mem : int;
+      node_index : int;
+      node_add : int;
+      node_find : int;
+      node_val_v : int;
+      node_val_find : int;
+      node_val_list : int;
+    }
 
     val counters : unit -> counters
     val dump_counters : unit Fmt.t

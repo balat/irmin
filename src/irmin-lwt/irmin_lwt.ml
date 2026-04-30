@@ -924,7 +924,20 @@ module type S = sig
 
     val merge : t Irmin.Merge.t
 
-    type counters
+    type counters = {
+      contents_hash : int;
+      contents_find : int;
+      contents_add : int;
+      contents_mem : int;
+      node_hash : int;
+      node_mem : int;
+      node_index : int;
+      node_add : int;
+      node_find : int;
+      node_val_v : int;
+      node_val_find : int;
+      node_val_list : int;
+    }
 
     val counters : unit -> counters
     val dump_counters : unit Fmt.t
@@ -1759,7 +1772,20 @@ module Make (S : Irmin.Generic_key.S) = struct
 
     let merge = S.Tree.merge
 
-    type counters = S.Tree.counters
+    type counters = S.Tree.counters = {
+      contents_hash : int;
+      contents_find : int;
+      contents_add : int;
+      contents_mem : int;
+      node_hash : int;
+      node_mem : int;
+      node_index : int;
+      node_add : int;
+      node_find : int;
+      node_val_v : int;
+      node_val_find : int;
+      node_val_list : int;
+    }
 
     let counters = S.Tree.counters
     let dump_counters = S.Tree.dump_counters
