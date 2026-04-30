@@ -984,6 +984,8 @@ module type S = sig
 
     type verifier_error = [ `Proof_mismatch of string ]
 
+    val verifier_error_t : verifier_error Irmin.Type.t
+
     val produce_proof :
       Repo.t -> kinded_key -> (t -> (t * 'a) Lwt.t) -> (Proof.t * 'a) Lwt.t
 
@@ -991,6 +993,17 @@ module type S = sig
       Proof.t -> (t -> (t * 'a) Lwt.t) -> (t * 'a, verifier_error) result Lwt.t
 
     val hash_of_proof_state : Proof.tree -> kinded_hash
+
+    module Private : sig
+      module Env : sig
+        type t
+
+        val t : t Irmin.Type.t
+        val is_empty : t -> bool
+      end
+
+      val get_env : t -> Env.t
+    end
   end
 
   (** {1 Commits} *)
@@ -1847,6 +1860,8 @@ module Make (S : Irmin.Generic_key.S) = struct
 
     type verifier_error = [ `Proof_mismatch of string ]
 
+    let verifier_error_t = S.Tree.verifier_error_t
+
     let produce_proof repo key f =
       let f' tree = Lwt_eio.Promise.await_lwt (f tree) in
       run_eio (fun () -> S.Tree.produce_proof repo key f')
@@ -1856,6 +1871,17 @@ module Make (S : Irmin.Generic_key.S) = struct
       run_eio (fun () -> S.Tree.verify_proof proof f')
 
     let hash_of_proof_state = S.Tree.hash_of_proof_state
+
+    module Private = struct
+      module Env = struct
+        type t = S.Tree.Private.Env.t
+
+        let t = S.Tree.Private.Env.t
+        let is_empty = S.Tree.Private.Env.is_empty
+      end
+
+      let get_env = S.Tree.Private.get_env
+    end
   end
 
   module Commit = struct
