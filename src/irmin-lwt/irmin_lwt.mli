@@ -323,6 +323,7 @@ module type S = sig
       module Val :
         Irmin.Commit.Generic_key.S
           with type t = value
+           and type node_key = node_key
            and type commit_key = key
            and module Info := Schema.Info
 
