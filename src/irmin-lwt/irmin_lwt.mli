@@ -1525,10 +1525,10 @@ module Sync : sig
     S with type db = X.t and type commit = X.commit and type info = X.info
 end
 
-val remote_store :
-  (module Irmin.Generic_key.S with type t = 'a) -> 'a -> Irmin.remote
-(** [remote_store t] is the remote corresponding to the local store [t].
-    Forwarding from [Irmin.remote_store]; pure (no Lwt). *)
+val remote_store : (module Lwt_store with type t = 'a) -> 'a -> Irmin.remote
+(** [remote_store (module S) t] is the remote corresponding to the local
+    Lwt-flavoured store [t]. Internally invokes [Irmin.remote_store
+    (module S.Underlying)]; pure (no Lwt). *)
 
 (** {1 JSON-as-tree projections}
 

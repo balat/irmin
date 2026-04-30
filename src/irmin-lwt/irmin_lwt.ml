@@ -2200,7 +2200,8 @@ module Sync = struct
   end
 end
 
-let remote_store = Irmin.remote_store
+let remote_store (type a) (module S : Lwt_store with type t = a) (t : a) =
+  Irmin.remote_store (module S.Underlying : Irmin.Generic_key.S with type t = a) t
 
 module Json_tree
     (Store : Irmin.S with type Schema.Contents.t = Irmin.Contents.json) =
