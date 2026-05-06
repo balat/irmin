@@ -17,6 +17,29 @@
 
 open! Import
 
+(* Records hoisted out of [module type S] so that consumers of the [Tree]
+   module can refer to them through a top-level path ([Tree_intf.counters],
+   [Tree.counters]). This is what lets implementations of [Tree.S] -- in
+   particular [Maker_v2] -- equate their own [counters] type with the one
+   the signature expects. *)
+type stats = { nodes : int; leafs : int; skips : int; depth : int; width : int }
+[@@deriving irmin]
+
+type counters = {
+  mutable contents_hash : int;
+  mutable contents_find : int;
+  mutable contents_add : int;
+  mutable contents_mem : int;
+  mutable node_hash : int;
+  mutable node_mem : int;
+  mutable node_index : int;
+  mutable node_add : int;
+  mutable node_find : int;
+  mutable node_val_v : int;
+  mutable node_val_find : int;
+  mutable node_val_list : int;
+}
+
 module type S = sig
   type path [@@deriving irmin]
   type step [@@deriving irmin]
@@ -331,7 +354,7 @@ module type S = sig
 
   (** {1 Stats} *)
 
-  type stats = {
+  type nonrec stats = stats = {
     nodes : int;  (** Number of node. *)
     leafs : int;  (** Number of leafs. *)
     skips : int;  (** Number of lazy nodes. *)
@@ -391,7 +414,7 @@ module type S = sig
 
   (** {1 Performance counters} *)
 
-  type counters = {
+  type nonrec counters = counters = {
     mutable contents_hash : int;
     mutable contents_find : int;
     mutable contents_add : int;
@@ -441,56 +464,5 @@ module type Sigs = sig
   module type S = sig
     include S
     (** @inline *)
-  end
-
-  module Make (B : Backend.S) : sig
-    include
-      S
-        with type path = B.Node.Path.t
-         and type step = B.Node.Path.step
-         and type metadata = B.Node.Metadata.t
-         and type contents = B.Contents.value
-         and type contents_key = B.Contents.Key.t
-         and type hash = B.Hash.t
-
-    type kinded_key =
-      [ `Contents of B.Contents.Key.t * metadata | `Node of B.Node.Key.t ]
-    [@@deriving irmin]
-
-    val import : B.Repo.t -> kinded_key -> t option Lwt.t
-    val import_no_check : B.Repo.t -> kinded_key -> t
-
-    val export :
-      ?clear:bool ->
-      B.Repo.t ->
-      [> write ] B.Contents.t ->
-      [> read_write ] B.Node.t ->
-      node ->
-      B.Node.key Lwt.t
-
-    val dump : t Fmt.t
-    val equal : t -> t -> bool
-    val key : t -> kinded_key option
-    val hash : ?cache:bool -> t -> kinded_hash
-    val to_backend_node : node -> B.Node.Val.t Lwt.t
-    val to_backend_portable_node : node -> B.Node_portable.t Lwt.t
-    val of_backend_node : B.Repo.t -> B.Node.value -> node
-
-    type 'result producer :=
-      B.Repo.t ->
-      kinded_key ->
-      (t -> (t * 'result) Lwt.t) ->
-      (Proof.t * 'result) Lwt.t
-
-    type verifier_error = [ `Proof_mismatch of string ] [@@deriving irmin]
-
-    type 'result verifier :=
-      Proof.t ->
-      (t -> (t * 'result) Lwt.t) ->
-      (t * 'result, verifier_error) result Lwt.t
-
-    val produce_proof : 'a producer
-    val verify_proof : 'a verifier
-    val hash_of_proof_state : Proof.tree -> kinded_hash
   end
 end
