@@ -87,8 +87,31 @@ let with_tmp_dir env f =
   in
   Fun.protect ~finally:cleanup (fun () -> f ~fs ~path)
 
+module Irmin_test = Irmin_lwt_test.Irmin_test
+
+(* Bridge [Irmin_watcher.hook] (Lwt-typed) to [Irmin.Backend.Watch.hook]
+   (Eio direct-style). Required by the harness Watch test on filesystem
+   backends. *)
+let bridged_listen_dir_hook : Irmin.Backend.Watch.hook =
+ fun id path f ->
+  let f_lwt s = Lwt_eio.run_eio (fun () -> f s) in
+  let unhook_lwt =
+    Lwt_eio.Promise.await_lwt (Irmin_watcher.hook id path f_lwt)
+  in
+  fun () -> Lwt_eio.Promise.await_lwt (unhook_lwt ())
+
+let suite_for config =
+  let store =
+    Irmin_test.store (module Irmin_lwt_fs) (module Irmin_lwt.Metadata.None)
+  in
+  let init ~config:_ = Lwt.return_unit in
+  Irmin_test.Suite.create ~name:"FS" ~init ~store ~config ()
+
 let () =
   Eio_main.run @@ fun env ->
+  Eio.Switch.run @@ fun sw ->
+  Irmin.Backend.Watch.set_watch_switch sw;
+  Irmin.Backend.Watch.set_listen_dir_hook bridged_listen_dir_hook;
   Lwt_eio.with_event_loop ~clock:env#clock @@ fun _ ->
   with_tmp_dir env @@ fun ~fs ~path ->
   let config_at sub =
@@ -99,4 +122,9 @@ let () =
   run "basic set/get" (fun () -> test_basic_set_get (config_at "a"));
   run "branch and commit" (fun () -> test_branch_and_commit (config_at "b"));
   run "persistence across reopen" (fun () -> test_persistence (config_at "c"));
-  print_endline "irmin-lwt-fs: all smoke tests passed"
+  print_endline "--- running irmin-lwt-test harness ---";
+  Lwt_eio.Promise.await_lwt
+    (Irmin_test.Store.run "irmin-lwt-fs" ~slow:false ~misc:[]
+       ~sleep:Lwt_unix.sleep
+       [ (`Quick, suite_for (config_at "harness")) ]);
+  print_endline "irmin-lwt-fs: all smoke tests + harness passed"
