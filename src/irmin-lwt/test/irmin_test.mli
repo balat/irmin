@@ -14,6 +14,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+module Irmin = Irmin_lwt
+
 module type S = Common.S
 module type Generic_key = Common.Generic_key
 

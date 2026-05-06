@@ -14,6 +14,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+module Irmin = Irmin_lwt
+
 let init_logs () =
   Logs.set_level (Some Debug);
   Logs.set_reporter (Common.reporter ())

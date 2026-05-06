@@ -14,6 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+module Irmin = Irmin_lwt
 open! Import
 open Common
 
@@ -1238,13 +1239,13 @@ module Make (S : Generic_key) = struct
         let c ?(info = S.Metadata.default) blob = `Contents (blob, info) in
         S.Tree.of_concrete
           (`Tree
-            [
-              ("aa", c "0");
-              ("a", c "1");
-              ("bbb", c "3");
-              ("b", c "3");
-              ("aaa", c "1");
-            ])
+             [
+               ("aa", c "0");
+               ("a", c "1");
+               ("bbb", c "3");
+               ("b", c "3");
+               ("aaa", c "1");
+             ])
       in
       let* _ = S.set_tree_exn t ~info:(infof "add tree") [] tree in
       let* e = S.Tree.get_tree tree [ "a" ] in
@@ -1790,46 +1791,48 @@ module Make (S : Generic_key) = struct
         S.Backend.Repo.batch repo (fun c n _ -> S.save_tree repo c n c1)
       in
       (match S.Tree.destruct c1 with
-      | `Contents _ -> Alcotest.fail "got `Contents, expected `Node"
-      | `Node node -> (
-          let* v = S.to_backend_node node in
-          let () =
-            let ls = B.Node.Val.list v in
-            Alcotest.(check int) "list wide node" size (List.length ls)
-          in
-          let* bar_key = with_contents repo (fun t -> B.Contents.add t "bar") in
-          let k = normal bar_key in
-          let v1 = B.Node.Val.add v "x" k in
-          let* () =
-            let h' = B.Node.Hash.hash v1 in
-            let+ h = with_node repo (fun n -> B.Node.add n v1) in
-            check B.Node.Hash.t "wide node + x: hash(v) = add(v)"
-              (B.Node.Key.to_hash h) h'
-          in
-          let () =
-            let v2 = B.Node.Val.add v "x" k in
-            check B.Node.Val.t "add x" v1 v2
-          in
-          let () =
-            let v0 = B.Node.Val.remove v1 "x" in
-            check B.Node.Val.t "remove x" v v0
-          in
-          let* () =
-            let v3 = B.Node.Val.remove v "1" in
-            let h' = B.Node.Hash.hash v3 in
-            with_node repo (fun n -> B.Node.add n v3) >|= fun h ->
-            check B.Node.Hash.t "wide node - 1 : hash(v) = add(v)"
-              (B.Node.Key.to_hash h) h'
-          in
-          (match B.Node.Val.find v "499999" with
-          | None | Some (`Node _) -> Alcotest.fail "value 499999 not found"
-          | Some (`Contents (x, _)) ->
-              let x = B.Contents.Key.to_hash x in
-              let x' = B.Contents.Hash.hash "499999" in
-              check B.Contents.Hash.t "find 499999" x x');
-          match B.Node.Val.find v "500000" with
-          | None -> Lwt.return_unit
-          | Some _ -> Alcotest.fail "value 500000 should not be found"))
+        | `Contents _ -> Alcotest.fail "got `Contents, expected `Node"
+        | `Node node -> (
+            let* v = S.to_backend_node node in
+            let () =
+              let ls = B.Node.Val.list v in
+              Alcotest.(check int) "list wide node" size (List.length ls)
+            in
+            let* bar_key =
+              with_contents repo (fun t -> B.Contents.add t "bar")
+            in
+            let k = normal bar_key in
+            let v1 = B.Node.Val.add v "x" k in
+            let* () =
+              let h' = B.Node.Hash.hash v1 in
+              let+ h = with_node repo (fun n -> B.Node.add n v1) in
+              check B.Node.Hash.t "wide node + x: hash(v) = add(v)"
+                (B.Node.Key.to_hash h) h'
+            in
+            let () =
+              let v2 = B.Node.Val.add v "x" k in
+              check B.Node.Val.t "add x" v1 v2
+            in
+            let () =
+              let v0 = B.Node.Val.remove v1 "x" in
+              check B.Node.Val.t "remove x" v v0
+            in
+            let* () =
+              let v3 = B.Node.Val.remove v "1" in
+              let h' = B.Node.Hash.hash v3 in
+              with_node repo (fun n -> B.Node.add n v3) >|= fun h ->
+              check B.Node.Hash.t "wide node - 1 : hash(v) = add(v)"
+                (B.Node.Key.to_hash h) h'
+            in
+            (match B.Node.Val.find v "499999" with
+            | None | Some (`Node _) -> Alcotest.fail "value 499999 not found"
+            | Some (`Contents (x, _)) ->
+                let x = B.Contents.Key.to_hash x in
+                let x' = B.Contents.Hash.hash "499999" in
+                check B.Contents.Hash.t "find 499999" x x');
+            match B.Node.Val.find v "500000" with
+            | None -> Lwt.return_unit
+            | Some _ -> Alcotest.fail "value 500000 should not be found"))
       >>= fun () -> B.Repo.close repo
     in
     run x test
@@ -2357,7 +2360,7 @@ module Make (S : Generic_key) = struct
 
       let* node_b =
         S.Tree.destruct tree
-        |> (function `Contents _ -> assert false | `Node n -> n)
+        |> ( function `Contents _ -> assert false | `Node n -> n )
         |> S.to_backend_node
       in
       let node_ph = pre_hash_of S.Backend.Node.Val.t node_b in

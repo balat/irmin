@@ -15,4 +15,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+module Irmin = Irmin_lwt
 include Irmin.Export_for_backends
+include Lwt.Syntax
+
+let ( >>= ) = Lwt.Infix.( >>= )
+let ( >|= ) = Lwt.Infix.( >|= )

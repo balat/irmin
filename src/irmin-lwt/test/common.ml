@@ -14,6 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+module Irmin = Irmin_lwt
 open! Import
 
 let random_char () = char_of_int (Random.int 256)
@@ -230,7 +231,10 @@ module Make_helpers (S : Generic_key) = struct
                 | Some v -> v ^ "_" ^ id
               in
               let v =
-                Irmin.Type.of_string (Conf.ty k) root_value |> Result.get_ok
+                (* Irmin 4 exposes [Conf.of_string] directly on the key
+                   instead of the [Conf.ty] / [Type.of_string] pair main
+                   used. *)
+                Conf.of_string k root_value |> Result.get_ok
               in
               Conf.add config k v
         in
