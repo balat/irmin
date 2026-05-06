@@ -20,6 +20,7 @@
     Irmin_git (Eio) on top of the in-memory Git store [Irmin_git.Mem]. *)
 
 module S = Irmin_lwt_git.Mem.KV (Irmin_lwt.Contents.String)
+module Irmin_test = Irmin_lwt_test.Irmin_test
 open Lwt.Syntax
 
 let info ?(author = "test") msg =
@@ -72,8 +73,22 @@ let run name f =
 
 let () =
   Eio_main.run @@ fun env ->
+  Eio.Switch.run @@ fun sw ->
+  Irmin.Backend.Watch.set_watch_switch sw;
   Lwt_eio.with_event_loop ~clock:env#clock @@ fun _ ->
   run "basic set/get" test_basic_set_get;
   run "branch and commit" test_branch_and_commit;
   run "git_commit passthrough" test_git_commit_passthrough;
-  print_endline "irmin-lwt-git: all smoke tests passed"
+  print_endline "--- running irmin-lwt-test harness ---";
+  let suite =
+    let store = (module S : Irmin_test.Generic_key) in
+    let init ~config:_ = Lwt.return_unit in
+    Irmin_test.Suite.create_generic_key ~name:"GIT" ~init ~store
+      ~config:(Irmin_lwt_git.config "_build/test-lwt-git-harness")
+      ()
+  in
+  Lwt_eio.Promise.await_lwt
+    (Irmin_test.Store.run "irmin-lwt-git" ~slow:false ~misc:[]
+       ~sleep:Lwt_unix.sleep
+       [ (`Quick, suite) ]);
+  print_endline "irmin-lwt-git: all smoke tests + harness passed"
