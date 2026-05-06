@@ -149,10 +149,10 @@ let to_strings (_, conf) =
   conf
   |> M.to_seq
   |> Seq.map (fun (K k, v) ->
-         ( k.name,
-           match k.of_univ v with
-           | Some v -> Type.to_string k.ty v
-           | None -> assert false ))
+      ( k.name,
+        match k.of_univ v with
+        | Some v -> Type.to_string k.ty v
+        | None -> assert false ))
 
 let pp ppf t =
   t |> to_strings |> List.of_seq |> Fmt.Dump.(list (pair string string)) ppf

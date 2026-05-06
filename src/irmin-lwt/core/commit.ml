@@ -133,11 +133,12 @@ module Store_generic_key
     (N : Node.Store)
     (S : Indexable.S)
     (H : Hash.S with type t = S.hash)
-    (V : S_generic_key
-           with type node_key = N.Key.t
-            and type commit_key = S.Key.t
-            and type t = S.value
-            and module Info := I) =
+    (V :
+      S_generic_key
+        with type node_key = N.Key.t
+         and type commit_key = S.Key.t
+         and type t = S.value
+         and module Info := I) =
 struct
   module Node = N
   module Val = V
@@ -584,7 +585,7 @@ module History (S : Store) = struct
       let merge =
         merge t ~info
         |> Merge.with_conflict (fun msg ->
-               Fmt.str "Recursive merging of common ancestors: %s" msg)
+            Fmt.str "Recursive merging of common ancestors: %s" msg)
         |> Merge.f
       in
       merge ~old c1 c2

@@ -164,7 +164,8 @@ module type S = sig
   (** [find] is similar to {!find_all} but it discards metadata. *)
 
   val get_all : t -> path -> (contents * metadata) Lwt.t
-  (** Same as {!find_all} but raise [Invalid_arg] if [k] is not present in [t]. *)
+  (** Same as {!find_all} but raise [Invalid_arg] if [k] is not present in [t].
+  *)
 
   val list :
     t ->
@@ -188,7 +189,8 @@ module type S = sig
     ?cache:bool ->
     path ->
     (step * t) Seq.t Lwt.t
-  (** [seq t key] follows the same behavior as {!list} but returns a sequence. *)
+  (** [seq t key] follows the same behavior as {!list} but returns a sequence.
+  *)
 
   val get : t -> path -> contents Lwt.t
   (** Same as {!get_all} but ignore the metadata. *)
@@ -309,7 +311,7 @@ module type S = sig
 
       See
       {{:https://github.com/mirage/irmin/blob/main/examples/fold.ml}
-        examples/fold.ml} for a demo of the different {!folder}s.
+       examples/fold.ml} for a demo of the different {!folder}s.
 
       See {!force} for details about the [force] parameters. By default it is
       [`True].
