@@ -14,7 +14,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-type t = ..
+(* Aliased to [Irmin.remote] so that constructors added by Irmin 4 (notably
+   [Backend.E of endpoint] inside Inner) are visible at our shim's type. *)
+type t = Irmin.remote = ..
 
 module type S = sig
   (** {1 Remote synchronization} *)
