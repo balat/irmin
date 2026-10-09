@@ -77,6 +77,11 @@
   eio
   eio_main
   eio.unix
-  lwt_eio)
+  lwt_eio
+  repr
+  fmt
+  mirage-mtime.unix
+  mirage-ptime.unix
+  mirage-sleep.unix)
  (enabled_if
   (<> %{model} "ppc64le")))
